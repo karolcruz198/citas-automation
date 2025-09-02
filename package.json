@@ -1,0 +1,17 @@
+{
+  "name": "citas-automation",
+  "version": "1.0.0",
+  "description": "Automatización de notificaciones para citas de Domus",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"No hay tests definidos\" && exit 0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.11.0",
+    "dotenv": "^17.2.1",
+    "moment": "^2.30.1"
+  }
+}
