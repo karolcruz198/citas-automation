@@ -141,7 +141,7 @@ async function createAndSendWiseCase(cita, groupId, templateId, inmobiliaria) {
 
         if (response && caseId) {
             console.log(`✅ Recordatorio enviado exitosamente a ${nombreCliente} para la cita ${cita.meeting_id}.`);
-            await wiseApi.updateCaseStatus(caseId, 'solved');
+            await wiseApi.updateCaseStatus(caseId, 'closed');
             console.log(`✅ Caso ${caseId} resuelto exitosamente.`);
         } else {
             console.error(`❌ Falló el envío del recordatorio para la cita ${cita.meeting_id}. No se recibió una respuesta exitosa.`);
@@ -170,7 +170,7 @@ async function createAndSendWiseCase(cita, groupId, templateId, inmobiliaria) {
 
             if (openCaseId) {
                 console.log(`✅ Caso abierto encontrado o capturado. ID: ${openCaseId}. Cerrando caso...`);
-                await wiseApi.updateCaseStatus(openCaseId, 'solved');
+                await wiseApi.updateCaseStatus(openCaseId, 'closed');
             } else {
                 console.log(`⚠️ No se pudo encontrar un caso abierto para cerrar. Intentando reintentar...`);
             }
@@ -181,7 +181,7 @@ async function createAndSendWiseCase(cita, groupId, templateId, inmobiliaria) {
 
             if (retryResponse && retryCaseId) {
                 console.log(`✅ Recordatorio enviado exitosamente después de la recuperación para la cita ${cita.meeting_id}.`);
-                await wiseApi.updateCaseStatus(retryCaseId, 'solved'); // Cerrar el caso del reintento también
+                await wiseApi.updateCaseStatus(retryCaseId, 'closed');
             } else {
                 console.error(`❌ Falló el reintento de envío del recordatorio para la cita ${cita.meeting_id}.`);
             }

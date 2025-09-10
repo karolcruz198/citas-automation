@@ -113,7 +113,7 @@ async function createAndSendWiseSurveyCase(cita, groupId, templateId, inmobiliar
 
         if (response && caseId) {
             console.log(`✅ Encuesta de satisfacción enviada exitosamente para la cita ${cita.meeting_id}.`);
-            await wiseApi.updateCaseStatus(caseId, 'solved');
+            await wiseApi.updateCaseStatus(caseId, 'closed');
             console.log(`✅ Caso ${caseId} actualizado a estado resuelto.`);
         } else {
             console.error(`❌ Falló el envío de la encuesta para la cita ${cita.meeting_id}. No se recibió una respuesta exitosa.`);

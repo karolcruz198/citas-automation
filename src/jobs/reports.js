@@ -167,7 +167,7 @@ async function sendReportMessage(ownerName, ownerPhone, linkTemplate, groupId, t
             let openCaseId = null;
 
             if (errorData && errorData.error === 'OPEN_CASES_EXIST' && Array.isArray(errorData.opened_cases) && errorData.opened_cases.length > 0) {
-                openCaseId = errorData.opened_cases[0];
+                openCaseId = String(errorData.opened_cases[0]);
                 console.log(`✅ ID de caso abierto obtenido directamente del error: ${openCaseId}.`);
             } else {
                 console.log(`❌ No se encontró ID de caso abierto en el error. Iniciando lógica de búsqueda...`);

@@ -31,10 +31,10 @@ async function runTest() {
     await testAppointmentReminders();
     
     // --- 2. PRUEBA DEL JOB DE REPORTES SEMANALES ---
-    //await testWeeklyReports();
+    await testWeeklyReports();
 
     // --- 3. PRUEBA DEL JOB DE ENCUESTAS DE SATISFACCIÓN ---
-    //await testSurveys();
+    await testSurveys();
 
     console.log("\n--- PRUEBA COMPLETA FINALIZADA ---");
 
@@ -106,6 +106,8 @@ async function testWeeklyReports() {
                 currentInmobiliaria,
                 propertyCode
             );
+        
+            console.log(`Enviando enlace completo: https://crm.domus.la/file/property/${linkTemplate}`);
 
         } catch (error) {
             console.error(`❌ Ocurrió un error inesperado al procesar la inmobiliaria ${currentInmobiliaria}:`, error);

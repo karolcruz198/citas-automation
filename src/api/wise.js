@@ -255,7 +255,7 @@ async function updateCaseStatus(caseId, status) {
         const url = `${process.env.WISE_API_URL}/cases/${caseId}`;
 
         const response = await axios.put(url, body, { headers });
-        console.log(`✅ Cas ${caseId} actualizado a estado '${status}'.`);
+        console.log(`✅ Caso ${caseId} actualizado a estado '${status}'.`);
         return response.data;
     } catch (error) {
         console.error(`❌ Fallo al actualizar caso ${caseId}:`, error.message);
