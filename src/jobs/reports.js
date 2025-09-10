@@ -7,53 +7,56 @@ const wiseApi = require ('../api/wise');
 
 const INMOBILIARIAS = ['bienco', 'uribienes', 'las_vegas']; 
 const REPORT_BASE_URL = 'https://crm_api.domus.la';
+const { getBrandName } = require('../utils/brands');
 
-function getFechasDeLaSemana() {
+function getWeekDates() {
     const today = moment();
     
-    const fechaInicio = today.startOf('isoWeek').format('YYYY-MM-DD');
-    
-    //Obtiene el final de la semana (sábado)
-    const fechaFin = moment(fechaInicio).add(5, 'days').format('YYYY-MM-DD')
+    const startDate = today.startOf('isoWeek').format('YYYY-MM-DD');
+    const endDate = moment(startDate).add(5, 'days').format('YYYY-MM-DD');
 
-    return { fechaInicio, fechaFin };
+    return { startDate, endDate };
 }
 
 async function sendWeeklyReports() {
     console.log("Iniciando tarea programada de envío de reportes semanales...");
 
-    // Analiza los IDs numéricos del archivo .env y los verifica
     const groupId = parseInt(process.env.WISE_GROUP_ID, 10);
-    const templateId = parseInt(process.env.WISE_TEMPLATE_ID_REPORTE, 10);
+    //const templateId = parseInt(process.env.WISE_TEMPLATE_ID_REPORTE, 10);
     
-    if (isNaN(groupId) || isNaN(templateId)) {
-        console.error("Error: WISE_GROUP_ID o WISE_TEMPLATE_ID_REPORTE no son números válidos en el archivo .env.");
-        console.error(`Valores leídos: WISE_GROUP_ID='${process.env.WISE_GROUP_ID}', WISE_TEMPLATE_ID_REPORTE='${process.env.WISE_TEMPLATE_ID_REPORTE}'`);
+    if (isNaN(groupId)) {
+        console.error("Error: WISE_GROUP_ID no es un número válido");
         return;
     }
 
-    const { fechaInicio, fechaFin } = getFechasDeLaSemana();
+    const { startDate, endDate } = getWeekDates();
 
     for (const inmobiliaria of INMOBILIARIAS) {
         console.log(`\n--- Procesando reportes para la inmobiliaria: ${inmobiliaria.toUpperCase()} ---`);
+        const envVarName = `WISE_TEMPLATE_ID_REPORTE_${inmobiliaria.toUpperCase()}`;
+        const templateId = parseInt(process.env[envVarName], 10);
 
-        const response = await domusApi.getCitasDeLaSemana(inmobiliaria);
+        if (isNaN(templateId) || templateId === 0) {
+            console.warn(`⚠️ La variable de entorno '${envVarName}' no está definida. Se omite el envío de reportes para esta inmobiliaria.`);
+            continue;
+        }
+
+        const inmuebles = await domusApi.getProperties(inmobiliaria);
         const citas = response.data;
         
-        if (!citas || citas.length === 0) {
-            console.log("No se encontraron citas esta semana. Siguiente inmobiliaria.");
+        if (!inmuebles || inmuebles.length === 0) {
+            console.log("No se encontraron inmuebles para esta inmobiliaria. Siguiente.");
             continue;
         }
 
         const processedProperties = new Set();
 
-        for (const cita of citas) {
-            const propertyIdpro = cita.property_id;
-            const propertyCode = cita.property_code;
-            const person = cita.person[0];
-
+        for (const inmueble of inmuebles) {
+            const propertyIdpro = inmueble.idpro;
+            const propertyCode = inmueble.codpro;
+            
             if (!propertyIdpro || !propertyCode) {
-                console.warn(`AVISO: La cita ${cita.meeting_id} no tiene datos completos. Se omite.`);
+                console.warn(`AVISO: El inmueble con ID ${inmueble.id} no tiene datos completos. Se omite.`);
                 continue;
             }
 
@@ -63,15 +66,15 @@ async function sendWeeklyReports() {
             processedProperties.add(propertyCode);
 
             try {
-
+                // --- Los siguientes pasos se mantienen, pero ahora usan los datos del inmueble ---
                 const ownerDetails = await domusApi.getOwnerDetails(inmobiliaria, propertyCode);
 
                 if (!ownerDetails || (!ownerDetails.phone && !ownerDetails.email)) {
-                    console.warn(`AVISO: No se encontraron detalles de contacto (teléfono o email) para el propietario del inmueble ${propertyCode}. Se omite.`);
+                    console.warn(`AVISO: No se encontraron detalles de contacto para el propietario del inmueble ${propertyCode}. Se omite.`);
                     continue;
                 }
 
-                const linkResponse = await domusApi.getOwnerLink(inmobiliaria, propertyIdpro, fechaInicio, fechaFin);
+                const linkResponse = await domusApi.getOwnerLink(inmobiliaria, propertyIdpro, startDate, endDate);
                 
                 if (!linkResponse || !linkResponse.data || !linkResponse.data.data) {
                     console.warn(`AVISO: No se pudo generar el enlace de reporte para el inmueble ${propertyCode}. Se omite.`);
@@ -80,6 +83,7 @@ async function sendWeeklyReports() {
                 
                 const urlData = linkResponse.data.data;
                 const linkCompleto = `https://crm.domus.la${urlData}`;
+                const linkTemplate = urlData.split('/file/property/')[1];
                 
                 console.log(`Enlace generado para el inmueble ${propertyCode}`);
                 console.log(`Enlace generado: ${linkCompleto}`);
@@ -87,8 +91,7 @@ async function sendWeeklyReports() {
                 await sendReportMessage(
                     ownerDetails.name,
                     ownerDetails.phone,
-                    ownerDetails.email,
-                    linkCompleto,
+                    linkTemplate,
                     groupId,
                     templateId,
                     inmobiliaria,
@@ -97,98 +100,106 @@ async function sendWeeklyReports() {
 
             } catch (error) {
                 console.error(`ERROR: No se pudo procesar el inmueble ${propertyCode}. Error:`, error.message);
-                continue; // Continúa con el siguiente inmueble en caso de error
+                continue;
             }
-
-            // const wiseResponse = await wiseApi.createCaseAndSend(payload);
-            // console.log("Respuesta de Wise CX:", wiseResponse);
         }
     }
 
     console.log("\nTarea de reportes finalizada.");
 }
 
-async function sendReportMessage(ownerName, ownerPhone, ownerEmail, reportLink, groupId, templateId, inmobiliaria, propertyCode) {
-    let payload = null;
-    let messageContent = "";
-
-    if (ownerPhone) {
-        // Payload para WhatsApp
-        payload = {
-            group_id: groupId,
-            source_channel: "whatsapp",
-            subject: `Reporte semanal de visitas - ${ownerName}`,
-            tags: ["reporte", "domus", "propietario"],
-            type_id: 0,
-            activities: [{
-                type: "user_reply",
-                user_id: 0,
-                channel: "whatsapp",
-                template: {
-                    template_id: templateId,
-                    parameters: [
-                        { key: "1", value: ownerName },
-                        { key: "2", value: reportLink }
-                    ]
-                },
-                contacts_to: [{
-                    name: ownerName,
-                    phone: ownerPhone
-                }]
-            }],
-            custom_fields: [{
-                field: "fecha_reporte",
-                value: moment().format('YYYY-MM-DD')
-            }, {
-                field: "codigo_inmueble_domus",
-                value: String(propertyCode)
-            }, {
-                field: "inmobiliaria",
-                value: inmobiliaria
-            }]
-        };
-        console.log(`Enviando reporte a ${ownerName} por WhatsApp...`);
-
-    } else if (ownerEmail) {
-        // Payload para Email
-        payload = {
-            group_id: groupId,
-            source_channel: "email",
-            subject: `Reporte semanal de visitas - ${ownerName}`,
-            tags: ["reporte", "domus", "propietario"],
-            type_id: 0,
-            activities: [{
-                type: "user_reply",
-                user_id: 0,
-                channel: "email",
-                content: `Hola ${ownerName},<br/><br/>
-                          ¡Tenemos un nuevo reporte para tu inmueble!<br/><br/>
-                          Puedes revisarlo en el siguiente enlace: <a href="${reportLink}">${reportLink}</a><br/><br/>
-                          ¡Gracias por tu confianza!`,
-                contacts_to: [{
-                    name: ownerName,
-                    email: ownerEmail
-                }]
-            }],
-            custom_fields: [{
-                field: "fecha_reporte",
-                value: moment().format('YYYY-MM-DD')
-            }, {
-                field: "codigo_inmueble_domus",
-                value: String(propertyCode)
-            }, {
-                field: "inmobiliaria",
-                value: inmobiliaria
-            }]
-        };
-        console.log(`Enviando reporte a ${ownerName} por Email...`);
-
-    } else {
-        console.warn(`AVISO: El propietario ${ownerName} no tiene teléfono ni correo electrónico. No se puede enviar el reporte.`);
+async function sendReportMessage(ownerName, ownerPhone, linkTemplate, groupId, templateId, inmobiliaria, propertyCode) {
+    if (!ownerPhone) {
+        console.warn(`AVISO: El propietario ${ownerName} no tiene un teléfono válido. No se puede enviar el reporte.`);
         return;
     }
 
-    await wiseApi.createCaseAndSend(payload);
+    const telefono = wiseApi.formatPhoneNumber(ownerPhone);
+    const marcaSpa = getBrandName(inmobiliaria);
+
+    const payload = {
+        group_id: groupId,
+        source_channel: "whatsapp",
+        subject: `Reporte semanal de visitas - ${ownerName}`,
+        tags: ["Creado por API", "Domus - Informe Propietarios"],
+        custom_fields: [
+            { "field": "email_1", "value": moment().format('YYYY-MM-DD') },
+            { "field": "email_2", "value": String(propertyCode) },
+            { "field": "marca_spa", "value": marcaSpa }
+        ],
+        type_id: 0,
+        activities: [{
+            type: "user_reply",
+            channel: "whatsapp",
+            template: {
+                template_id: templateId,
+                parameters: [
+                    { key: "1", value: ownerName },
+                    { key: "https://crm.domus.la/file/property/", value: linkTemplate }
+                ]
+            },
+            contacts_to: [{
+                name: ownerName,
+                phone: telefono
+            }]
+        }]
+        
+    };
+
+    try {
+        console.log(`Intentando crear caso de reporte para el inmueble ${propertyCode}...`);
+
+        const response = await wiseApi.createCaseAndSend(payload, null);
+        const caseId = response?.case_id;
+
+        if (response && caseId) {
+            console.log(`✅ Reporte enviado exitosamente a ${ownerName} para el inmueble ${propertyCode}.`);
+            await wiseApi.updateCaseStatus(caseId, 'closed');
+            console.log(`✅ Caso ${caseId} actualizado a estado cerrado.`);
+        } else {
+            console.error(`❌ Falló el envío del reporte para el inmueble ${propertyCode}. No se recibió una respuesta exitosa.`);
+        }
+    } catch (error) {
+        const errorData = error.response ? error.response.data : null;
+        console.error(`❌ Falló el intento inicial de crear el caso de reporte. Es probable que ya exista uno.`, errorData || error.message);
+
+        try {
+            let openCaseId = null;
+
+            if (errorData && errorData.error === 'OPEN_CASES_EXIST' && Array.isArray(errorData.opened_cases) && errorData.opened_cases.length > 0) {
+                openCaseId = errorData.opened_cases[0];
+                console.log(`✅ ID de caso abierto obtenido directamente del error: ${openCaseId}.`);
+            } else {
+                console.log(`❌ No se encontró ID de caso abierto en el error. Iniciando lógica de búsqueda...`);
+                const contact = await wiseApi.getContactIdByPhone(telefono);
+                const contactId = contact?.id;
+
+                if (contactId) {
+                    openCaseId = await wiseApi.getOpenCaseIdByContactId(contactId);
+                }
+            }
+
+            if (openCaseId) {
+                console.log(`✅ Caso abierto encontrado o capturado. ID: ${openCaseId}. Cerrando caso...`);
+                await wiseApi.updateCaseStatus(openCaseId, 'closed');
+                console.log(`✅ Caso ${openCaseId} cerrado. Reintentando la creación...`);
+            } else {
+                console.log(`⚠️ No se pudo encontrar un caso abierto para cerrar. Intentando reintentar...`);
+            }
+
+            const retryResponse = await wiseApi.createCaseAndSend(payload, null);
+            const retryCaseId = retryResponse?.case_id;
+
+            if (retryResponse && retryCaseId) {
+                console.log(`✅ Reporte enviado exitosamente después de la recuperación para el inmueble ${propertyCode}.`);
+                await wiseApi.updateCaseStatus(retryCaseId, 'closed');
+            } else {
+                console.error(`❌ Falló el reintento de envío del reporte para el inmueble ${propertyCode}.`);
+            }
+        } catch (recoveryError) {
+            console.error(`❌ Error crítico durante el proceso de recuperación y reintento para el inmueble ${propertyCode}:`, recoveryError.response ? recoveryError.response.data : recoveryError.message);
+        }
+    }
 }
 
 async function main() {
@@ -201,5 +212,5 @@ if (require.main === module) {
 
 module.exports = {
     sendWeeklyReports,
-    main
+    sendReportMessage
 };

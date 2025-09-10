@@ -8,11 +8,13 @@ require('dotenv').config({ path: '../../.env' });
  * @param {string} apiType
  * @param {string} endpoint
  * @param {object} params
- * @returns {Promise<Array|null>}
+ * @param {object} extraHeaders
+ * @returns {Promise<object|null>}
  */
 
-async function getFromDomus(inmobiliaria, apiType, endpoint, params) {
+async function getFromDomus(inmobiliaria, apiType, endpoint, params, extraHeaders = {}) {
     let baseUrl;
+    let authHeaderValue;
 
     switch (apiType) {
         case 'citas':
@@ -21,7 +23,7 @@ async function getFromDomus(inmobiliaria, apiType, endpoint, params) {
         case 'reports':
             baseUrl = process.env.DOMUS_REPORTS_URL;
             break;
-        case 'owners': // Nuevo tipo de API
+        case 'owners':
             baseUrl = process.env.DOMUS_OWNERS_URL;
             break;
         default:
@@ -43,7 +45,8 @@ async function getFromDomus(inmobiliaria, apiType, endpoint, params) {
     const headers = {
         'Authorization': apiKey,
         'Content-Type': 'application/json',
-        'Inmobiliaria': 1
+        'Inmobiliaria': 1,
+        ...extraHeaders
     };
 
     try {
@@ -64,9 +67,9 @@ async function getFromDomus(inmobiliaria, apiType, endpoint, params) {
 }
 
 async function postToDomus(inmobiliaria, endpoint, data) {
+    const baseUrl = process.env.DOMUS_REPORTS_URL;
     const apiKey = process.env[`DOMUS_KEY_REPORTS_${inmobiliaria.toUpperCase()}`];
-    
-    const baseUrl = process.env[urlVariableName];
+
 
     if (!apiKey || !baseUrl) {
         console.error(`Error: Credenciales no encontradas para la inmobiliaria '${inmobiliaria}' y tipo de API '${apiType}'.`);
@@ -104,18 +107,15 @@ async function getMeetingsForDay(inmobiliaria, date) {
 
 async function getConcludedMeetings(inmobiliaria, startTime, endTime) {
     const params = {
-        end_date: endTime,
-        start_date: startTime
+        start_date: startTime,
+        end_date: endTime
+        
     };
     return getFromDomus(inmobiliaria, 'citas', 'meetings', params);
 }
 
-/**
- * @param {string} inmobiliaria
- * @returns {Promise<object>}
- */
+
 async function getWeeklyMeetings(inmobiliaria) {
-    // Obtiene la fecha de hoy y la fecha de inicio de la semana (lunes)
     const fechaFin = moment().format('YYYY-MM-DD');
     const fechaInicio = moment().startOf('week').format('YYYY-MM-DD');
     
@@ -128,11 +128,6 @@ async function getWeeklyMeetings(inmobiliaria) {
     
 }
 
-/**
- * @param {string} inmobiliaria
- * @param {number} propertyCode
- * @returns {Promise<object|null>}
- */
 async function getOwnerDetails(inmobiliaria, propertyCode) {
     try {
     
@@ -161,14 +156,7 @@ async function getOwnerDetails(inmobiliaria, propertyCode) {
    
 }
 
-/**
- * @param {string} inmobiliaria
- * @param {number} propertyId
- * @param {string} fechaInicio
- * @param {string} fechaFin
- * @returns {Promise<object>}
- */
-async function getOwnerLink(inmobiliaria, property_idpro, fechaInicio, fechaFin) {
+async function getOwnerLink(inmobiliaria, property_idpro, startDate, endDate) {
     try {
         const DOMUS_REPORTS_URL = process.env.DOMUS_REPORTS_URL;
         const domusReportsApiKey = process.env[`DOMUS_KEY_REPORTS_${inmobiliaria.toUpperCase()}`];
@@ -189,8 +177,8 @@ async function getOwnerLink(inmobiliaria, property_idpro, fechaInicio, fechaFin)
             property: {
                 id: String(property_idpro)
             },
-            start_date: fechaInicio,
-            end_date: fechaFin
+            start_date: startDate,
+            end_date: endDate
         };
         
         console.log("Enviando solicitud POST para obtener el enlace del reporte...");
@@ -210,6 +198,54 @@ async function getOwnerLink(inmobiliaria, property_idpro, fechaInicio, fechaFin)
     }
 }
 
+async function getCityByBranchName(inmobiliaria, branchName) {
+    try {
+        const response = await getFromDomus(inmobiliaria, 'owners', 'administrative/branches', {});
+
+        if (!response || !response.data) {
+            console.warn(`AVISO: No se pudieron obtener los datos de sucursales para ${inmobiliaria}.`);
+            return null;
+        }
+
+        const branchData = response.data.find(branch => branch.name === branchName);
+
+        if (branchData && branchData.city_name) {
+            return branchData.city_name.trim();
+        }
+
+        console.warn(`AVISO: No se encontró la ciudad para la sucursal '${branchName}' en ${inmobiliaria}.`);
+        return null;
+    } catch (error) {
+        console.error(`Error al obtener la ciudad de la sucursal ${branchName} para ${inmobiliaria}:`, error.message);
+        return null;
+    }
+}
+
+/**
+ * @param {string} inmobiliaria
+ * @returns {Array<object>}
+ */
+async function getProperties(inmobiliaria) {
+    try {
+        const extraHeaders = {
+            'Perpage': 12
+        };
+
+        const response = await getFromDomus(inmobiliaria, 'owners', 'properties', {}, extraHeaders);
+
+        if (response && response.data) {
+            console.log(`✅ Se obtuvieron ${response.data.length} inmuebles para ${inmobiliaria}.`);
+            return response.data;
+        } else {
+            console.warn(`AVISO: No se encontraron inmuebles para ${inmobiliaria}.`);
+            return [];
+        }
+    } catch (error) {
+        console.error(`❌ ERROR en la función getProperties para ${inmobiliaria}:`, error.message);
+        return [];
+    }
+}
+
 module.exports = {
     getFromDomus,
     postToDomus,
@@ -217,5 +253,7 @@ module.exports = {
     getConcludedMeetings,
     getWeeklyMeetings,
     getOwnerDetails,
-    getOwnerLink
+    getOwnerLink,
+    getCityByBranchName,
+    getProperties
 };
