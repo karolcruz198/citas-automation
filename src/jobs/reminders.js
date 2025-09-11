@@ -16,11 +16,9 @@ async function sendDailyReminders() {
     const hoy = moment().format('YYYY-MM-DD');
 
     const groupId = parseInt(process.env.WISE_GROUP_ID, 10);
-    //const templateId = parseInt(process.env.WISE_TEMPLATE_ID_RECORDATORIO, 10);
 
     // Verificamos si la conversión fue exitosa
     if (isNaN(groupId)) {
-        //console.error("Error: WISE_GROUP_ID o WISE_TEMPLATE_ID_RECORDATORIO no son números válidos en el archivo .env.");
         console.error("Error: WISE_GROUP_ID no es un número válido");
         return; 
     }
@@ -141,7 +139,7 @@ async function createAndSendWiseCase(cita, groupId, templateId, inmobiliaria) {
 
         if (response && caseId) {
             console.log(`✅ Recordatorio enviado exitosamente a ${nombreCliente} para la cita ${cita.meeting_id}.`);
-            await wiseApi.updateCaseStatus(caseId, 'closed');
+            await wiseApi.updateCaseStatus(caseId, 'solved');
             console.log(`✅ Caso ${caseId} resuelto exitosamente.`);
         } else {
             console.error(`❌ Falló el envío del recordatorio para la cita ${cita.meeting_id}. No se recibió una respuesta exitosa.`);
@@ -196,3 +194,8 @@ module.exports = {
     sendDailyReminders,
     createAndSendWiseCase
 };
+
+//Para que el script se ejecute al ser llamado por cron
+if (require.main === module) {
+    sendDailyReminders();
+}

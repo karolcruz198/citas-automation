@@ -22,7 +22,6 @@ async function sendWeeklyReports() {
     console.log("Iniciando tarea programada de envío de reportes semanales...");
 
     const groupId = parseInt(process.env.WISE_GROUP_ID, 10);
-    //const templateId = parseInt(process.env.WISE_TEMPLATE_ID_REPORTE, 10);
     
     if (isNaN(groupId)) {
         console.error("Error: WISE_GROUP_ID no es un número válido");
@@ -42,7 +41,6 @@ async function sendWeeklyReports() {
         }
 
         const inmuebles = await domusApi.getProperties(inmobiliaria);
-        const citas = response.data;
         
         if (!inmuebles || inmuebles.length === 0) {
             console.log("No se encontraron inmuebles para esta inmobiliaria. Siguiente.");
@@ -66,7 +64,6 @@ async function sendWeeklyReports() {
             processedProperties.add(propertyCode);
 
             try {
-                // --- Los siguientes pasos se mantienen, pero ahora usan los datos del inmueble ---
                 const ownerDetails = await domusApi.getOwnerDetails(inmobiliaria, propertyCode);
 
                 if (!ownerDetails || (!ownerDetails.phone && !ownerDetails.email)) {

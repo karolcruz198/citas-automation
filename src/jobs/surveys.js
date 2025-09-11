@@ -17,10 +17,8 @@ async function sendSurveys() {
 
     // Analiza los IDs numéricos del archivo .env y los verifica
     const groupId = parseInt(process.env.WISE_GROUP_ID, 10);
-    //const templateId = parseInt(process.env.WISE_TEMPLATE_ID_ENCUESTA, 10);
     
     if (isNaN(groupId)) {
-        //console.error("Error: WISE_GROUP_ID o WISE_TEMPLATE_ID_ENCUESTA no son números válidos en el archivo .env.");
         console.error("Error: WISE_GROUP_ID no es un número válido");
     }
 
@@ -113,7 +111,7 @@ async function createAndSendWiseSurveyCase(cita, groupId, templateId, inmobiliar
 
         if (response && caseId) {
             console.log(`✅ Encuesta de satisfacción enviada exitosamente para la cita ${cita.meeting_id}.`);
-            await wiseApi.updateCaseStatus(caseId, 'closed');
+            await wiseApi.updateCaseStatus(caseId, 'solved');
             console.log(`✅ Caso ${caseId} actualizado a estado resuelto.`);
         } else {
             console.error(`❌ Falló el envío de la encuesta para la cita ${cita.meeting_id}. No se recibió una respuesta exitosa.`);
@@ -167,3 +165,8 @@ module.exports = {
     sendSurveys,
     createAndSendWiseSurveyCase
 };
+
+//Para que el script se ejecute al ser llamado por cron
+if (require.main === module) {
+    sendSurveys();
+}
