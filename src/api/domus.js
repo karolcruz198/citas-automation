@@ -228,7 +228,7 @@ async function getCityByBranchName(inmobiliaria, branchName) {
 async function getProperties(inmobiliaria) {
     try {
         const extraHeaders = {
-            'Perpage': 12
+            'Perpage': 50
         };
 
         const response = await getFromDomus(inmobiliaria, 'owners', 'properties', {}, extraHeaders);
