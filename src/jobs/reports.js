@@ -6,17 +6,7 @@ const domusApi = require('../api/domus');
 const wiseApi = require ('../api/wise');
 
 const INMOBILIARIAS = ['bienco', 'uribienes', 'las_vegas']; 
-const REPORT_BASE_URL = 'https://crm_api.domus.la';
 const { getBrandName } = require('../utils/brands');
-
-function getWeekDates() {
-    const today = moment();
-    
-    const startDate = today.startOf('isoWeek').format('YYYY-MM-DD');
-    const endDate = moment(startDate).add(5, 'days').format('YYYY-MM-DD');
-
-    return { startDate, endDate };
-}
 
 async function sendWeeklyReports() {
     console.log("Iniciando tarea programada de envío de reportes semanales...");
@@ -27,8 +17,6 @@ async function sendWeeklyReports() {
         console.error("Error: WISE_GROUP_ID no es un número válido");
         return;
     }
-
-    const { startDate, endDate } = getWeekDates();
 
     for (const inmobiliaria of INMOBILIARIAS) {
         console.log(`\n--- Procesando reportes para la inmobiliaria: ${inmobiliaria.toUpperCase()} ---`);

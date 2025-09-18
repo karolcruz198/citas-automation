@@ -13,9 +13,7 @@ async function sendSurveys() {
     console.log("Iniciando tarea programada de envío de encuestas de satisfacción...");
 
     const horaActual = moment().format('YYYY-MM-DD HH:mm:ss');
-    const horaAnterior = moment().subtract(1, 'hour').format('YYYY-MM-DD HH:mm:ss');
 
-    // Analiza los IDs numéricos del archivo .env y los verifica
     const groupId = parseInt(process.env.WISE_GROUP_ID, 10);
     
     if (isNaN(groupId)) {
@@ -34,8 +32,7 @@ async function sendSurveys() {
         }
 
         try {
-            const response = await domusApi.getConcludedMeetings(inmobiliaria, horaAnterior, horaActual);
-            const citasConcluidas = response.data.data;
+            const citasConcluidas = await domusApi.getConcludedMeetings(inmobiliaria, horaActual);
 
             if (!citasConcluidas || citasConcluidas.length === 0) {
                 console.log("No se encontraron citas concluidas en la última hora. Siguiente inmobiliaria.");
@@ -45,7 +42,18 @@ async function sendSurveys() {
             console.log(`Se encontraron ${citasConcluidas.length} citas. Enviando encuestas...`);
 
             for (const cita of citasConcluidas) {
-                await createAndSendWiseSurveyCase(cita, groupId, templateId, inmobiliaria);
+                try {
+                    const detalleCita = await domusApi.getMeetingDetail(inmobiliaria, cita.id);
+
+                    if (detalleCita) {
+                        await createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inmobiliaria);
+                    } else {
+                        console.warn(`⚠️ No se pudo obtener el detalle de la cita con ID ${cita.id}. Se omite.`);
+                    }
+                } catch (err) {
+                    console.error(`❌ Falló al obtener detalles de la cita ${cita.id} en ${inmobiliaria}:`, err.message);
+                    continue;
+                }
             }
         } catch (error) {
             console.error(`❌ Falló la obtención de citas para la inmobiliaria ${inmobiliaria}:`, error.message);
@@ -56,23 +64,29 @@ async function sendSurveys() {
     console.log("\nTarea de encuestas finalizada.");
 }
 
-async function createAndSendWiseSurveyCase(cita, groupId, templateId, inmobiliaria) {
-    const cliente = (cita.person && cita.person.length > 0) ? cita.person[0] : null;
+async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inmobiliaria) {
+    const cliente = detalleCita.contact || null;
 
     if (!cliente || !cliente.phone) {
-        console.warn(`⚠️ Cita con ID ${cita.meeting_id} no tiene un número de teléfono válido. Se omite la encuesta.`);
+        console.warn(`⚠️ Cita con ID ${detalleCita.id} no tiene un número de teléfono válido. Se omite la encuesta.`);
         return;
     }   
 
     const telefono = wiseApi.formatPhoneNumber(cliente.phone);
     const nombreCliente = cliente.name || "Cliente";
-    const brokerName = (cita.broker && cita.broker.broker_name) ? cita.broker.broker_name : "el asesor";
-    const brokerId = (cita.broker && cita.broker.broker_id) ? String(cita.broker.broker_id) : "N/A";
+    const brokerData = Array.isArray(detalleCita.detailProperties) 
+        ? detalleCita.detailProperties.find(prop => prop.broker_name) 
+        : null;
+    const brokerName = brokerData?.broker_name || "Asesor no identificado";
+    const brokerId = brokerData?.broker_id ? String(brokerData.broker_id) : "N/A";
     const marcaSpa = getBrandName(inmobiliaria);
 
-    const cityName = (inmobiliaria === 'bienco' && cita.branch)
-        ? await domusApi.getCityByBranchName(inmobiliaria, cita.branch)
-        : 'Antioquia';
+    let cityName = "Antioquia"; // por defecto
+    if (marcaSpa.toLowerCase() === "bienco") {
+        cityName = detalleCita.city 
+            || (detalleCita.branch && detalleCita.branch.name) 
+            || "Antioquia";
+    }
 
     const payload = {
         group_id: groupId,
@@ -80,8 +94,8 @@ async function createAndSendWiseSurveyCase(cita, groupId, templateId, inmobiliar
         subject: `Encuesta de Satisfacción - ${nombreCliente}`,
         tags: ["Creado por API", "Domus - Encuesta"],
         custom_fields: [
-            { "field": "email_1", "value": cita.start_date },
-            { "field": "email_2", "value": cita.meeting_id },
+            { "field": "email_1", "value": detalleCita.date },
+            { "field": "email_2", "value": String(detalleCita.id) },
             { "field": "email_3", "value": brokerName },
             { "field": "marca_spa", "value": marcaSpa }
         ],
@@ -105,16 +119,16 @@ async function createAndSendWiseSurveyCase(cita, groupId, templateId, inmobiliar
     };
 
     try {
-        console.log(`Intentando crear caso de encuesta para la cita ${cita.meeting_id}...`);
+        console.log(`Intentando crear caso de encuesta para la cita ${detalleCita.id}...`);
         const response = await wiseApi.createCaseAndSend(payload, null);
         const caseId = response?.case_id;
 
         if (response && caseId) {
-            console.log(`✅ Encuesta de satisfacción enviada exitosamente para la cita ${cita.meeting_id}.`);
+            console.log(`✅ Encuesta de satisfacción enviada exitosamente para la cita ${detalleCita.id}.`);
             await wiseApi.updateCaseStatus(caseId, 'solved');
             console.log(`✅ Caso ${caseId} actualizado a estado resuelto.`);
         } else {
-            console.error(`❌ Falló el envío de la encuesta para la cita ${cita.meeting_id}. No se recibió una respuesta exitosa.`);
+            console.error(`❌ Falló el envío de la encuesta para la cita ${detalleCita.id}. No se recibió una respuesta exitosa.`);
         }
     } catch (error) {
         const errorData = error.response ? error.response.data : null;
@@ -150,13 +164,13 @@ async function createAndSendWiseSurveyCase(cita, groupId, templateId, inmobiliar
             const retryCaseId = retryResponse?.case_id;
 
             if (retryResponse && retryCaseId) {
-                console.log(`✅ Encuesta enviada exitosamente después de la recuperación para la cita ${cita.meeting_id}.`);
+                console.log(`✅ Encuesta enviada exitosamente después de la recuperación para la cita ${detalleCita.id}.`);
                 await wiseApi.updateCaseStatus(retryCaseId, 'closed');
             } else {
-                console.error(`❌ Falló el reintento de envío de la encuesta para la cita ${cita.meeting_id}.`);
+                console.error(`❌ Falló el reintento de envío de la encuesta para la cita ${detalleCita.id}.`);
             }
         } catch (recoveryError) {
-            console.error(`❌ Error crítico durante el proceso de recuperación y reintento para la cita ${cita.meeting_id}:`, recoveryError.response ? recoveryError.response.data : recoveryError.message);
+            console.error(`❌ Error crítico durante el proceso de recuperación y reintento para la cita ${detalleCita.id}:`, recoveryError.response ? recoveryError.response.data : recoveryError.message);
         }
     }
 }

@@ -1,5 +1,5 @@
 const axios = require('axios');
-const moment = require('moment');
+const moment = require('moment-timezone');
 
 require('dotenv').config({ path: '../../.env' });
 
@@ -14,77 +14,68 @@ require('dotenv').config({ path: '../../.env' });
 
 async function getFromDomus(inmobiliaria, apiType, endpoint, params, extraHeaders = {}) {
     let baseUrl;
-    let authHeaderValue;
+    let apiKey;
 
     switch (apiType) {
         case 'citas':
-            baseUrl = process.env.DOMUS_API_URL;
-            break;
-        case 'reports':
-            baseUrl = process.env.DOMUS_REPORTS_URL;
+            baseUrl = process.env.DOMUS_CRM_BASE_URL;
+            apiKey = process.env[`DOMUS_API_KEY_CRM_${inmobiliaria.toUpperCase()}`];
             break;
         case 'owners':
             baseUrl = process.env.DOMUS_OWNERS_URL;
+            apiKey = process.env[`DOMUS_KEY_OWNERS_${inmobiliaria.toUpperCase()}`];
             break;
         default:
             console.error(`Error: Tipo de API desconocido: '${apiType}'.`);
             return null;
     }
 
-    const keyVariableName = (apiType === 'reports') ? 
-        `DOMUS_KEY_REPORTS_${inmobiliaria.toUpperCase()}` :
-        `DOMUS_KEY_CITAS_${inmobiliaria.toUpperCase()}`;
-
-    const apiKey = process.env[keyVariableName];
-
-    if (!apiKey || !baseUrl) {
+     if (!apiKey || !baseUrl) {
         console.error(`Error: Credenciales no encontradas para la inmobiliaria '${inmobiliaria}' y tipo de API '${apiType}'.`);
         return null;
     }
 
     const headers = {
         'Authorization': apiKey,
-        'Content-Type': 'application/json',
-        'Inmobiliaria': 1,
         ...extraHeaders
     };
 
     try {
-        const url = `${baseUrl}${endpoint}`;
+        const url = new URL(endpoint, baseUrl).toString();
         const response = await axios.get(url, { params, headers });
-        console.log(`Éxito: Consulta GET a ${url} para ${inmobiliaria} realizada.`);
+        console.log(`✅ GET ${url} para ${inmobiliaria}`);
+        //console.log("Respuesta completa de Axios:", response);
         return response.data;
 
     } catch (error) {
-        console.error(`Error en la consulta GET a la API de Domus para ${inmobiliaria}: ${error.message}`);
+        console.error(`❌ Error GET Domus (${inmobiliaria}): ${error.message}`);
         if (error.response) {
-            console.error("Detalle del error:", error.response.data);
+        console.error("Detalle del error:", error.response.data);
         }
         return null;
-        
+            
     }
     
 }
 
 async function postToDomus(inmobiliaria, endpoint, data) {
-    const baseUrl = process.env.DOMUS_REPORTS_URL;
-    const apiKey = process.env[`DOMUS_KEY_REPORTS_${inmobiliaria.toUpperCase()}`];
+    const baseUrl = process.env.DOMUS_CRM_BASE_URL;
+    const apiKey = process.env[`DOMUS_API_KEY_CRM_${inmobiliaria.toUpperCase()}`];
 
 
     if (!apiKey || !baseUrl) {
-        console.error(`Error: Credenciales no encontradas para la inmobiliaria '${inmobiliaria}' y tipo de API '${apiType}'.`);
+        console.error(`Error: Credenciales no encontradas para la inmobiliaria '${inmobiliaria}'.`);
         return null;
     }
 
     const headers = {
-        'Authorization': apiKey,
-        'Content-Type': 'application/json'
+        'Authorization': apiKey
     };
 
     try {
-        const url = `${baseUrl}${endpoint}`;
+        const url = new URL(endpoint, baseUrl).toString();
         const response = await axios.post(url, data, { headers });
-        console.log(`Éxito: Consulta POST a ${url} para ${inmobiliaria} realizada.`);
+        console.log(`✅ POST ${url} para ${inmobiliaria}`);
         return response.data;
     } catch (error) {
         console.error(`Error en la consulta POST a la API de Domus para ${inmobiliaria}: ${error.message}`);
@@ -96,35 +87,63 @@ async function postToDomus(inmobiliaria, endpoint, data) {
 }
 
 async function getMeetingsForDay(inmobiliaria, date) {
-    const today = moment(date).format('YYYY-MM-DD');
+  const today = moment(date).format('YYYY-MM-DD');
+  const params = { startDate: today, endDate: today };
+
+  const appointments = await getFromDomus(inmobiliaria, 'citas', 'api/public/appointments', params);
+  return Array.isArray(appointments) ? appointments : [];
+}
+
+async function getConcludedMeetings(inmobiliaria, date) {
+    const today = moment(date).tz("America/Bogota").format('YYYY-MM-DD');
     const params = {
-        start_date: `${today} 00:00:00`,
-        end_date: `${today} 23:59:59`
+        startDate: today,
+        endDate: today
     };
-    return getFromDomus(inmobiliaria, 'citas', 'meetings', params);
     
-}
+    const appointments = await getFromDomus(inmobiliaria, 'citas', 'api/public/appointments', params);
 
-async function getConcludedMeetings(inmobiliaria, startTime, endTime) {
-    const params = {
-        start_date: startTime,
-        end_date: endTime
+    if (!Array.isArray(appointments)) {
+        console.error("Error: La respuesta de la API no es un array válido de citas.");
+        return [];
+    }
+
+    const now = moment().tz("America/Bogota");
+    console.log(`Hora actual de la prueba: ${now.format('YYYY-MM-DD HH:mm:ss')}`);
+
+    const startOfRange = now.clone().startOf("hour");
+    const previousHour = now.clone().subtract(1, "hour").startOf("hour");    
+
+    const concludedMeetings = appointments.filter(appointment => {
+        const appointmentEnd = moment.tz(
+            `${appointment.date} ${appointment.end_time}`,
+            "YYYY-MM-DD HH:mm:ss",
+            "America/Bogota"
+        );
         
-    };
-    return getFromDomus(inmobiliaria, 'citas', 'meetings', params);
-}
+        return (
+            appointmentEnd.isAfter(previousHour) &&       // terminó después de la hora anterior
+            appointmentEnd.isSameOrBefore(now) &&        // y antes o igual a la hora actual
+            appointment.status !== "Cancelada" &&        // excluir canceladas
+            appointment.status !== "Reprogramada"      // excluir reprogramadas
+        );
+    });
 
+    return concludedMeetings;
+}
 
 async function getWeeklyMeetings(inmobiliaria) {
-    const fechaFin = moment().format('YYYY-MM-DD');
-    const fechaInicio = moment().startOf('week').format('YYYY-MM-DD');
+    const today = moment().tz("America/Bogota");
+
+    const startOfWeek = today.clone().isoWeekday(1).format('YYYY-MM-DD');
+    const endOfWeek = today.clone().isoWeekday(6).format('YYYY-MM-DD');
     
     const params = {
-        start_date: `${fechaInicio} 00:00:00`,
-        end_date: `${fechaFin} 23:59:59`
+        startDate: startOfWeek,
+        endDate: endOfWeek
     };
 
-    return getFromDomus(inmobiliaria, 'citas', 'meetings', params);
+    return getFromDomus(inmobiliaria, 'citas', 'api/public/appointments', params);
     
 }
 
@@ -182,8 +201,6 @@ async function getOwnerLink(inmobiliaria, property_idpro, startDate, endDate) {
         };
         
         console.log("Enviando solicitud POST para obtener el enlace del reporte...");
-        //console.log(`URL de la solicitud: ${url}`);
-        //console.log(`Body de la solicitud: ${JSON.stringify(body, null, 2)}`);
 
         const response = await axios.post(url, body, { headers });
         
@@ -194,29 +211,6 @@ async function getOwnerLink(inmobiliaria, property_idpro, startDate, endDate) {
         if (error.response) {
             console.error("Detalle del error:", error.response.data);
         }
-        return null;
-    }
-}
-
-async function getCityByBranchName(inmobiliaria, branchName) {
-    try {
-        const response = await getFromDomus(inmobiliaria, 'owners', 'administrative/branches', {});
-
-        if (!response || !response.data) {
-            console.warn(`AVISO: No se pudieron obtener los datos de sucursales para ${inmobiliaria}.`);
-            return null;
-        }
-
-        const branchData = response.data.find(branch => branch.name === branchName);
-
-        if (branchData && branchData.city_name) {
-            return branchData.city_name.trim();
-        }
-
-        console.warn(`AVISO: No se encontró la ciudad para la sucursal '${branchName}' en ${inmobiliaria}.`);
-        return null;
-    } catch (error) {
-        console.error(`Error al obtener la ciudad de la sucursal ${branchName} para ${inmobiliaria}:`, error.message);
         return null;
     }
 }
@@ -246,6 +240,28 @@ async function getProperties(inmobiliaria) {
     }
 }
 
+async function getMeetingDetail(inmobiliaria, meetingId) {
+    try {
+        const response = await getFromDomus(
+            inmobiliaria,
+            'citas',
+            `api/public/appointments/${meetingId}`,
+            {}
+        );
+
+        if (!response || !response.data) {
+            console.warn(`⚠️ No se encontraron datos de cita ${meetingId} para ${inmobiliaria}.`);
+            return null;
+        }
+
+        // Retorna el objeto completo tal cual lo entrega la API
+        return response.data;
+    } catch (error) {
+        console.error(`❌ Error al obtener detalle de cita ${meetingId} para ${inmobiliaria}:`, error.message);
+        return null;
+    }
+}
+
 module.exports = {
     getFromDomus,
     postToDomus,
@@ -254,6 +270,6 @@ module.exports = {
     getWeeklyMeetings,
     getOwnerDetails,
     getOwnerLink,
-    getCityByBranchName,
-    getProperties
+    getProperties,
+    getMeetingDetail
 };

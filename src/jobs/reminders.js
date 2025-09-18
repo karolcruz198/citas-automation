@@ -17,7 +17,6 @@ async function sendDailyReminders() {
 
     const groupId = parseInt(process.env.WISE_GROUP_ID, 10);
 
-    // Verificamos si la conversión fue exitosa
     if (isNaN(groupId)) {
         console.error("Error: WISE_GROUP_ID no es un número válido");
         return; 
@@ -35,53 +34,67 @@ async function sendDailyReminders() {
         }
 
         try {
-            const response = await domusApi.getMeetingsForDay(inmobiliaria, hoy);
-            const citasHoy = response.data.data;
-    
+            const citasHoy = await domusApi.getMeetingsForDay(inmobiliaria, hoy);
+
             if (!citasHoy || citasHoy.length === 0) {
                 console.log("No se encontraron citas para hoy. Siguiente inmobiliaria.");
                 continue;
             }
             
             console.log(`Se encontraron ${citasHoy.length} citas. Enviando recordatorios...`);
-    
+
             for (const cita of citasHoy) {
-                await createAndSendWiseCase(cita, groupId, templateId, inmobiliaria);
+                try {
+                    const detalle = await domusApi.getMeetingDetail(inmobiliaria, cita.id);
+
+
+                    await createAndSendWiseCase(
+                        { ...cita, detalle },
+                        groupId,
+                        templateId,
+                        inmobiliaria
+                    );
+
+                } catch (err) {
+                    console.error(`❌ Falló al obtener detalles de la cita ${cita.id} en ${inmobiliaria}:`, err.message);
+                    continue;
+                }
             }
         } catch (error) {
             console.error(`❌ Falló la obtención de citas para la inmobiliaria ${inmobiliaria}:`, error.message);
             continue;
         }
+
     }
 
     console.log("Tarea de recordatorios finalizada");
 }
 
-/**
- * @param {object} cita
- * @param {string} groupId
- * @param {string} templateId
- */
-async function createAndSendWiseCase(cita, groupId, templateId, inmobiliaria) {
-    const cliente = (cita.person && cita.person.length > 0) ? cita.person[0] : null;
+
+async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobiliaria) {
+    const cliente = citaConDetalle.contact || null;
 
     if (!cliente || !cliente.phone) {
-        console.warn(`⚠️ Cita ${cita.meeting_id} omitida. No se encontró información de la persona o el teléfono.`);
+        console.warn(`⚠️ Cita ${citaConDetalle.id} omitida. No se encontró información de la persona o el teléfono.`);
         return;
     }
 
     const telefono = wiseApi.formatPhoneNumber(cliente.phone);
     const nombreCliente = cliente.name || "Cliente";
-    const horaCita = moment(cita.start_date).format('hh:mm A');
-    const direccionInmueble = cita.place || "el inmueble";
+    const horaCita = moment(citaConDetalle.init_time, 'HH:mm:ss').format('hh:mm A');
+    const direccionInmueble = citaConDetalle.address || "el inmueble";
     const asuntoCaso = `Recordatorio de Cita para ${nombreCliente}`;
     const marcaSpa = getBrandName(inmobiliaria);
 
-    let cityName = null;
-    if (inmobiliaria === 'bienco' && cita.branch) {
-        cityName = await domusApi.getCityByBranchName(inmobiliaria, cita.branch);
-    } else {
-        cityName = 'Antioquia';
+    let cityName = "Antioquia"; // por defecto
+    if (marcaSpa.toLowerCase() === "bienco") {
+        cityName = citaConDetalle.city 
+            || (citaConDetalle.branch && citaConDetalle.branch.name) 
+            || "Antioquia";
+    }
+    let gestionSpa = null;
+    if (Array.isArray(citaConDetalle.detailProperties) && citaConDetalle.detailProperties.length > 0) {
+        gestionSpa = citaConDetalle.detailProperties[0].biz ?? citaConDetalle.detailProperties[0].biz_code ?? null;
     }
 
     const payload = {
@@ -90,26 +103,12 @@ async function createAndSendWiseCase(cita, groupId, templateId, inmobiliaria) {
         subject: asuntoCaso,
         tags: ["Creado por API", "Domus - Recordatorios Cita"],
         custom_fields: [
-            {
-                "field": "email_1",
-                "value": cita.start_date
-            },
-            {
-                "field": "email_2",
-                "value": cita.meeting_id
-            },
-            {
-                "field": "email_3",
-                "value": direccionInmueble
-            },
-            {
-                "field": "email_4",
-                "value": horaCita
-            },
-            {
-                "field": "marca_spa",
-                "value": marcaSpa
-            }
+            { field: "email_1", value: citaConDetalle.date ?? "" },
+            { field: "email_2", value: String(citaConDetalle.id) },
+            { field: "email_3", value: direccionInmueble },
+            { field: "email_4", value: horaCita },
+            { field: "marca_spa", value: marcaSpa },
+            { field: "gestion_spa", value: gestionSpa ?? "" }
         ],
         type_id: 0,
         activities: [{
@@ -133,16 +132,16 @@ async function createAndSendWiseCase(cita, groupId, templateId, inmobiliaria) {
     };
 
     try {
-        console.log(`Intentando crear caso para la cita ${cita.meeting_id}...`);
+        console.log(`Intentando crear caso para la cita ${cita.id}...`);
         const response = await wiseApi.createCaseAndSend(payload, null);
         const caseId = response?.case_id;
 
         if (response && caseId) {
-            console.log(`✅ Recordatorio enviado exitosamente a ${nombreCliente} para la cita ${cita.meeting_id}.`);
+            console.log(`✅ Recordatorio enviado exitosamente a ${nombreCliente} para la cita ${cita.id}.`);
             await wiseApi.updateCaseStatus(caseId, 'solved');
             console.log(`✅ Caso ${caseId} resuelto exitosamente.`);
         } else {
-            console.error(`❌ Falló el envío del recordatorio para la cita ${cita.meeting_id}. No se recibió una respuesta exitosa.`);
+            console.error(`❌ Falló el envío del recordatorio para la cita ${cita.id}. No se recibió una respuesta exitosa.`);
         }
     } catch (error) {
         const errorData = error.response ? error.response.data : null;
@@ -178,14 +177,14 @@ async function createAndSendWiseCase(cita, groupId, templateId, inmobiliaria) {
             const retryCaseId = retryResponse?.case_id;
 
             if (retryResponse && retryCaseId) {
-                console.log(`✅ Recordatorio enviado exitosamente después de la recuperación para la cita ${cita.meeting_id}.`);
+                console.log(`✅ Recordatorio enviado exitosamente después de la recuperación para la cita ${cita.id}.`);
                 await wiseApi.updateCaseStatus(retryCaseId, 'closed');
             } else {
-                console.error(`❌ Falló el reintento de envío del recordatorio para la cita ${cita.meeting_id}.`);
+                console.error(`❌ Falló el reintento de envío del recordatorio para la cita ${cita.id}.`);
             }
 
         } catch (recoveryError) {
-            console.error(`❌ Error crítico durante el proceso de recuperación y reintento para la cita ${cita.meeting_id}:`, recoveryError.response ? recoveryError.response.data : recoveryError.message);
+            console.error(`❌ Error crítico durante el proceso de recuperación y reintento para la cita ${cita.id}:`, recoveryError.response ? recoveryError.response.data : recoveryError.message);
         }
     }
 }
