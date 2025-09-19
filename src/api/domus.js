@@ -42,6 +42,7 @@ async function getFromDomus(inmobiliaria, apiType, endpoint, params, extraHeader
 
     try {
         const url = new URL(endpoint, baseUrl).toString();
+        console.log(`Parámetros para la llamada a ${inmobiliaria}:`, params);
         const response = await axios.get(url, { params, headers });
         console.log(`✅ GET ${url} para ${inmobiliaria}`);
         //console.log("Respuesta completa de Axios:", response);
@@ -90,6 +91,11 @@ async function getMeetingsForDay(inmobiliaria, date) {
   const today = moment(date).format('YYYY-MM-DD');
   const params = { startDate: today, endDate: today };
 
+  const typeIds = getAppointmentTypeIds(inmobiliaria);
+  if (typeIds.length > 0) {
+    params.type = typeIds.join(',');
+  }
+
   const appointments = await getFromDomus(inmobiliaria, 'citas', 'api/public/appointments', params);
   return Array.isArray(appointments) ? appointments : [];
 }
@@ -100,6 +106,11 @@ async function getConcludedMeetings(inmobiliaria, date) {
         startDate: today,
         endDate: today
     };
+
+    const typeIds = getAppointmentTypeIds(inmobiliaria);
+    if (typeIds.length > 0) {
+        params.type = typeIds.join(',');
+    }
     
     const appointments = await getFromDomus(inmobiliaria, 'citas', 'api/public/appointments', params);
 
@@ -134,7 +145,6 @@ async function getConcludedMeetings(inmobiliaria, date) {
 
 async function getWeeklyMeetings(inmobiliaria) {
     const today = moment().tz("America/Bogota");
-
     const startOfWeek = today.clone().isoWeekday(1).format('YYYY-MM-DD');
     const endOfWeek = today.clone().isoWeekday(6).format('YYYY-MM-DD');
     
@@ -142,6 +152,11 @@ async function getWeeklyMeetings(inmobiliaria) {
         startDate: startOfWeek,
         endDate: endOfWeek
     };
+
+    const typeIds = getAppointmentTypeIds(inmobiliaria);
+    if (typeIds.length > 0) {
+        params.type = typeIds.join(',');
+    }
 
     return getFromDomus(inmobiliaria, 'citas', 'api/public/appointments', params);
     
@@ -260,6 +275,14 @@ async function getMeetingDetail(inmobiliaria, meetingId) {
         console.error(`❌ Error al obtener detalle de cita ${meetingId} para ${inmobiliaria}:`, error.message);
         return null;
     }
+}
+function getAppointmentTypeIds(inmobiliaria) {
+  const envVar = process.env[`APPOINTMENT_TYPE_IDS_${inmobiliaria.toUpperCase()}`];
+  if (!envVar) {
+    console.warn(`Advertencia: No se encontraron IDs para la inmobiliaria '${inmobiliaria}'.`);
+    return [];
+  }
+  return envVar.split(',').map(id => parseInt(id.trim(), 10));
 }
 
 module.exports = {

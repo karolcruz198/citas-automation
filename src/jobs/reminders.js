@@ -8,7 +8,7 @@ const wiseApi = require ('../api/wise');
 // Lista de las inmobiliarias a procesar.
 const INMOBILIARIAS = ['bienco', 'uribienes', 'las_vegas'];
 
-const { getBrandName } = require('../utils/brands');
+const { getBrandName, getCityFromBranchName } = require('../utils/brands');
 
 async function sendDailyReminders() {
     console.log("Iniciando tarea recordatorio citas");
@@ -86,12 +86,16 @@ async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobi
     const asuntoCaso = `Recordatorio de Cita para ${nombreCliente}`;
     const marcaSpa = getBrandName(inmobiliaria);
 
-    let cityName = "Antioquia"; // por defecto
-    if (marcaSpa.toLowerCase() === "bienco") {
-        cityName = citaConDetalle.city 
-            || (citaConDetalle.branch && citaConDetalle.branch.name) 
-            || "Antioquia";
+    let cityName = "";
+    const propertyDetails = citaConDetalle.detailProperties;
+    if (propertyDetails && propertyDetails.length > 0 && propertyDetails[0].city) {
+        cityName = propertyDetails[0].city;
+    } else if (marcaSpa.toLowerCase() === "bienco") {
+        cityName = getCityFromBranchName(citaConDetalle.branch?.name) || "Bienco";
+    } else {
+        cityName = "Antioquia";
     }
+
     let gestionSpa = null;
     if (Array.isArray(citaConDetalle.detailProperties) && citaConDetalle.detailProperties.length > 0) {
         gestionSpa = citaConDetalle.detailProperties[0].biz ?? citaConDetalle.detailProperties[0].biz_code ?? null;
@@ -132,16 +136,16 @@ async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobi
     };
 
     try {
-        console.log(`Intentando crear caso para la cita ${cita.id}...`);
+        console.log(`Intentando crear caso para la cita ${citaConDetalle.id}...`);
         const response = await wiseApi.createCaseAndSend(payload, null);
         const caseId = response?.case_id;
 
         if (response && caseId) {
-            console.log(`✅ Recordatorio enviado exitosamente a ${nombreCliente} para la cita ${cita.id}.`);
+            console.log(`✅ Recordatorio enviado exitosamente a ${nombreCliente} para la cita ${citaConDetalle.id}.`);
             await wiseApi.updateCaseStatus(caseId, 'solved');
             console.log(`✅ Caso ${caseId} resuelto exitosamente.`);
         } else {
-            console.error(`❌ Falló el envío del recordatorio para la cita ${cita.id}. No se recibió una respuesta exitosa.`);
+            console.error(`❌ Falló el envío del recordatorio para la cita ${citaConDetalle.id}. No se recibió una respuesta exitosa.`);
         }
     } catch (error) {
         const errorData = error.response ? error.response.data : null;
@@ -177,14 +181,14 @@ async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobi
             const retryCaseId = retryResponse?.case_id;
 
             if (retryResponse && retryCaseId) {
-                console.log(`✅ Recordatorio enviado exitosamente después de la recuperación para la cita ${cita.id}.`);
+                console.log(`✅ Recordatorio enviado exitosamente después de la recuperación para la cita ${citaConDetalle.id}.`);
                 await wiseApi.updateCaseStatus(retryCaseId, 'closed');
             } else {
-                console.error(`❌ Falló el reintento de envío del recordatorio para la cita ${cita.id}.`);
+                console.error(`❌ Falló el reintento de envío del recordatorio para la cita ${citaConDetalle.id}.`);
             }
 
         } catch (recoveryError) {
-            console.error(`❌ Error crítico durante el proceso de recuperación y reintento para la cita ${cita.id}:`, recoveryError.response ? recoveryError.response.data : recoveryError.message);
+            console.error(`❌ Error crítico durante el proceso de recuperación y reintento para la cita ${citaConDetalle.id}:`, recoveryError.response ? recoveryError.response.data : recoveryError.message);
         }
     }
 }
