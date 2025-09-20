@@ -5,7 +5,6 @@ const moment = require('moment');
 const domusApi = require('../api/domus');
 const wiseApi = require ('../api/wise');
 
-// Lista de las inmobiliarias a procesar.
 const INMOBILIARIAS = ['bienco', 'uribienes', 'las_vegas'];
 
 const { getBrandName, getCityFromBranchName } = require('../utils/brands');
@@ -73,14 +72,23 @@ async function sendDailyReminders() {
 
 async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobiliaria) {
     const cliente = citaConDetalle.contact || null;
+    let telefono = null;
 
-    if (!cliente || !cliente.phone) {
+    if (cliente) {
+        if (cliente.phone) {
+            telefono = cliente.phone;
+        } else if (Array.isArray(cliente.phones) && cliente.phones.length > 0) {
+            telefono = cliente.phones[0].phone;
+        }
+    }
+
+    if (!telefono) {
         console.warn(`⚠️ Cita ${citaConDetalle.id} omitida. No se encontró información de la persona o el teléfono.`);
         return;
     }
 
-    const telefono = wiseApi.formatPhoneNumber(cliente.phone);
-    const nombreCliente = cliente.name || "Cliente";
+    const telefonoFormateado = wiseApi.formatPhoneNumber(telefono);
+    const nombreCliente = cliente.full_name || cliente.name || "Cliente";
     const horaCita = moment(citaConDetalle.init_time, 'HH:mm:ss').format('hh:mm A');
     const direccionInmueble = citaConDetalle.address || "el inmueble";
     const asuntoCaso = `Recordatorio de Cita para ${nombreCliente}`;
@@ -128,7 +136,7 @@ async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobi
             },
             contacts_to: [{
                 name: nombreCliente,
-                phone: telefono,
+                phone: telefonoFormateado,
                 city: cityName
             }]
         }]

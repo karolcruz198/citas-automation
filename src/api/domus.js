@@ -172,8 +172,9 @@ async function getOwnerDetails(inmobiliaria, propertyCode) {
             return null;
         }
 
-        const ownerDocument = listResponse.data[0].document;
-        
+        const owner = listResponse.data[0];
+        const ownerDocument = owner.document;
+
         const detailResponse = await getFromDomus(inmobiliaria, 'owners', `owners/${ownerDocument}`);
 
         if (!detailResponse || !detailResponse.data) {
@@ -181,7 +182,20 @@ async function getOwnerDetails(inmobiliaria, propertyCode) {
             return null;
         }
 
-        return detailResponse.data;
+        const detailData = detailResponse.data;
+
+        const phone =
+            (Array.isArray(detailData.phones) && detailData.phones.length > 0 && detailData.phones[0].number) ||
+            (Array.isArray(owner.phones) && owner.phones.length > 0 && owner.phones[0].number) ||
+            null;
+
+        const email = detailData.email || owner.email || null;
+
+        return {
+            ...detailData,
+            phone,
+            email
+        };
 
     } catch (error) {
         console.error(`Error en el flujo de obtención de datos del propietario para ${propertyCode}: ${error.message}`);

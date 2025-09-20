@@ -67,25 +67,29 @@ async function sendSurveys() {
 async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inmobiliaria) {
     const cliente = detalleCita.contact || null;
 
-    if (!cliente || !cliente.phone) {
+    const telefono = cliente?.phones?.[0]?.phone || null;
+    if (!telefono) {
         console.warn(`⚠️ Cita con ID ${detalleCita.id} no tiene un número de teléfono válido. Se omite la encuesta.`);
         return;
-    }   
+    }  
 
-    const telefono = wiseApi.formatPhoneNumber(cliente.phone);
-    const nombreCliente = cliente.name || "Cliente";
-    const brokerData = Array.isArray(detalleCita.detailProperties) 
-        ? detalleCita.detailProperties.find(prop => prop.broker_name) 
-        : null;
-    const brokerName = brokerData?.broker_name || "Asesor no identificado";
-    const brokerId = brokerData?.broker_id ? String(brokerData.broker_id) : "N/A";
+    const telefonoFormateado = wiseApi.formatPhoneNumber(telefono);
+    const nombreCliente = cliente.full_name || cliente.name || "Cliente";
+
+    const property = Array.isArray(detalleCita.detailProperties) ? detalleCita.detailProperties[0] : null;
+    const brokerObj = property?.broker?.[0] || property?.brokers?.[0] || null;
+    const brokerName = brokerObj?.name || "Asesor asignado";
+    const brokerId = brokerObj?.code ? String(brokerObj.code) : "N/A";
+
     const marcaSpa = getBrandName(inmobiliaria);
 
-    let cityName = "Antioquia"; // por defecto
-    if (marcaSpa.toLowerCase() === "bienco") {
-        cityName = detalleCita.city 
-            || (detalleCita.branch && detalleCita.branch.name) 
-            || "Antioquia";
+    const propertyDetails = citaConDetalle.detailProperties;
+    if (propertyDetails && propertyDetails.length > 0 && propertyDetails[0].city) {
+        cityName = propertyDetails[0].city;
+    } else if (marcaSpa.toLowerCase() === "bienco") {
+        cityName = getCityFromBranchName(citaConDetalle.branch?.name) || "Bienco";
+    } else {
+        cityName = "Antioquia";
     }
 
     const payload = {
@@ -112,7 +116,7 @@ async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inm
             },
             contacts_to: [{
                 name: nombreCliente,
-                phone: telefono,
+                phone: telefonoFormateado,
                 city: cityName
             }]
         }]

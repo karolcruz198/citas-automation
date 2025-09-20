@@ -42,7 +42,7 @@ async function sendWeeklyReports() {
             const propertyCode = inmueble.codpro;
             
             if (!propertyIdpro || !propertyCode) {
-                console.warn(`AVISO: El inmueble con ID ${inmueble.id} no tiene datos completos. Se omite.`);
+                console.warn(`AVISO: El inmueble con ID ${inmueble.idpro} no tiene datos completos. Se omite.`);
                 continue;
             }
 
