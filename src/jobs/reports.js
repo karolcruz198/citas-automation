@@ -18,6 +18,9 @@ async function sendWeeklyReports() {
         return;
     }
 
+    const endDate = moment();
+    const startDate = moment().subtract(6, 'months');
+
     for (const inmobiliaria of INMOBILIARIAS) {
         console.log(`\n--- Procesando reportes para la inmobiliaria: ${inmobiliaria.toUpperCase()} ---`);
         const envVarName = `WISE_TEMPLATE_ID_REPORTE_${inmobiliaria.toUpperCase()}`;
