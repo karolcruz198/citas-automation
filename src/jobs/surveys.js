@@ -66,12 +66,21 @@ async function sendSurveys() {
 
 async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inmobiliaria) {
     const cliente = detalleCita.contact || null;
+    let telefono = null;
 
-    const telefono = cliente?.phones?.[0]?.phone || null;
+    if (cliente) {
+        if (cliente.phone) {
+            telefono = cliente.phone;
+        }
+        else if (Array.isArray(cliente.phones) && cliente.phones.length > 0) {
+            telefono = cliente.phones[0].phone;
+        }
+    }
+
     if (!telefono) {
-        console.warn(`⚠️ Cita con ID ${detalleCita.id} no tiene un número de teléfono válido. Se omite la encuesta.`);
+        console.warn(`⚠️ Cita ${detalleCita.id} omitida. No se encontró el teléfono.`);
         return;
-    }  
+    } 
 
     const telefonoFormateado = wiseApi.formatPhoneNumber(telefono);
     const nombreCliente = cliente.full_name || cliente.name || "Cliente";
@@ -83,11 +92,11 @@ async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inm
 
     const marcaSpa = getBrandName(inmobiliaria);
 
-    const propertyDetails = citaConDetalle.detailProperties;
+    const propertyDetails = detalleCita.detailProperties;
     if (propertyDetails && propertyDetails.length > 0 && propertyDetails[0].city) {
         cityName = propertyDetails[0].city;
     } else if (marcaSpa.toLowerCase() === "bienco") {
-        cityName = getCityFromBranchName(citaConDetalle.branch?.name) || "Bienco";
+        cityName = getCityFromBranchName(detalleCita.branch?.name) || "Bienco";
     } else {
         cityName = "Antioquia";
     }

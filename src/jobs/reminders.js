@@ -13,7 +13,6 @@ async function sendDailyReminders() {
     console.log("Iniciando tarea recordatorio citas");
 
     const hoy = moment().format('YYYY-MM-DD');
-
     const groupId = parseInt(process.env.WISE_GROUP_ID, 10);
 
     if (isNaN(groupId)) {
@@ -48,7 +47,7 @@ async function sendDailyReminders() {
 
 
                     await createAndSendWiseCase(
-                        { ...cita, detalle },
+                        detalle,
                         groupId,
                         templateId,
                         inmobiliaria
@@ -77,13 +76,14 @@ async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobi
     if (cliente) {
         if (cliente.phone) {
             telefono = cliente.phone;
-        } else if (Array.isArray(cliente.phones) && cliente.phones.length > 0) {
+        }
+        else if (Array.isArray(cliente.phones) && cliente.phones.length > 0) {
             telefono = cliente.phones[0].phone;
         }
     }
 
     if (!telefono) {
-        console.warn(`⚠️ Cita ${citaConDetalle.id} omitida. No se encontró información de la persona o el teléfono.`);
+        console.warn(`⚠️ Cita ${citaConDetalle.id} omitida. No se encontró el teléfono.`);
         return;
     }
 
