@@ -221,7 +221,7 @@ async function getOwnerLink(inmobiliaria, property_idpro, startDate, endDate) {
         const url = `${baseUrl}/api/public/owner/link`;
         
         const headers = {
-            'Authorization': domusReportsApiKey,
+            'Authorization': apiKey,
             'Content-Type': 'application/json'
         };
 
