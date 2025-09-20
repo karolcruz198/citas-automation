@@ -18,8 +18,8 @@ async function sendWeeklyReports() {
         return;
     }
 
-    const endDate = moment();
-    const startDate = moment().subtract(6, 'months');
+    const endDate = moment().format('YYYY-MM-DD');
+    const startDate = moment().subtract(6, 'months').format('YYYY-MM-DD');
 
     for (const inmobiliaria of INMOBILIARIAS) {
         console.log(`\n--- Procesando reportes para la inmobiliaria: ${inmobiliaria.toUpperCase()} ---`);
