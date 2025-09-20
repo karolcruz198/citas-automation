@@ -25,6 +25,10 @@ async function getFromDomus(inmobiliaria, apiType, endpoint, params, extraHeader
             baseUrl = process.env.DOMUS_OWNERS_URL;
             apiKey = process.env[`DOMUS_KEY_OWNERS_${inmobiliaria.toUpperCase()}`];
             break;
+        case 'reports':
+            baseUrl = process.env.DOMUS_CRM_BASE_URL;
+            apiKey = process.env[`DOMUS_API_KEY_CRM_${inmobiliaria.toUpperCase()}`];
+            break;
         default:
             console.error(`Error: Tipo de API desconocido: '${apiType}'.`);
             return null;
@@ -42,7 +46,7 @@ async function getFromDomus(inmobiliaria, apiType, endpoint, params, extraHeader
 
     try {
         const url = new URL(endpoint, baseUrl).toString();
-        console.log(`Parámetros para la llamada a ${inmobiliaria}:`, params);
+        //console.log(`Parámetros para la llamada a ${inmobiliaria}:`, params);
         const response = await axios.get(url, { params, headers });
         console.log(`✅ GET ${url} para ${inmobiliaria}`);
         //console.log("Respuesta completa de Axios:", response);
@@ -206,15 +210,15 @@ async function getOwnerDetails(inmobiliaria, propertyCode) {
 
 async function getOwnerLink(inmobiliaria, property_idpro, startDate, endDate) {
     try {
-        const DOMUS_REPORTS_URL = process.env.DOMUS_REPORTS_URL;
-        const domusReportsApiKey = process.env[`DOMUS_KEY_REPORTS_${inmobiliaria.toUpperCase()}`];
+        const baseUrl = process.env.DOMUS_CRM_BASE_URL;
+        const apiKey = process.env[`DOMUS_API_KEY_CRM_${inmobiliaria.toUpperCase()}`];
         
-        if (!domusReportsApiKey || !DOMUS_REPORTS_URL) {
+        if (!apiKey || !baseUrl) {
             console.error(`Error: No se encontró la API Key o la URL de reportes para ${inmobiliaria}.`);
             return null;
         }
 
-        const url = `${DOMUS_REPORTS_URL}/owner/link`;
+        const url = `${baseUrl}/api/public/owner/link`;
         
         const headers = {
             'Authorization': domusReportsApiKey,
@@ -229,7 +233,7 @@ async function getOwnerLink(inmobiliaria, property_idpro, startDate, endDate) {
             end_date: endDate
         };
         
-        console.log("Enviando solicitud POST para obtener el enlace del reporte...");
+        //console.log(`📤 POST ${url} para ${inmobiliaria} con body:`, body);
 
         const response = await axios.post(url, body, { headers });
         
