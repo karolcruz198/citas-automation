@@ -101,7 +101,16 @@ async function getMeetingsForDay(inmobiliaria, date) {
   }
 
   const appointments = await getFromDomus(inmobiliaria, 'citas', 'api/public/appointments', params);
-  return Array.isArray(appointments) ? appointments : [];
+
+  if (!Array.isArray(appointments)) {
+    console.error("Error: La respuesta de la API no es un array válido de citas.");
+    return [];
+  }
+  const validMeetings = appointments.filter(appointment => 
+    appointment.status !== "Cancelada" &&
+    appointment.status !== "Reprogramada"
+  );
+  return validMeetings;
 }
 
 async function getConcludedMeetings(inmobiliaria, date) {

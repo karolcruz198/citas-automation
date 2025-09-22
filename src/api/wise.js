@@ -89,9 +89,10 @@ async function createCaseAndSend(payload, contactId) {
         console.error(`Error al crear el caso: ${error.message}`);
         if (error.response){
             console.error("Detalle del error:", error.response.data);
+            return error.response.data;  
             
         }
-        return null;
+        return { error: error.message, opened_cases: [] }; 
         
     }
     

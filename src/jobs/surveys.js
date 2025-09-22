@@ -7,7 +7,7 @@ const wiseApi = require ('../api/wise');
 
 const INMOBILIARIAS = ['bienco', 'uribienes', 'las_vegas'];
 
-const { getBrandName } = require('../utils/brands');
+const { getBrandName, getCityFromBranchName } = require('../utils/brands');
 
 async function sendSurveys() {
     console.log("Iniciando tarea programada de envío de encuestas de satisfacción...");
@@ -115,7 +115,7 @@ async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inm
         type_id: 0,
         activities: [{
             type: "user_reply",
-            channel: "whatsapp",
+            channel: "outgoing_whatsapp",
             template: {
                 template_id: templateId,
                 parameters: [
@@ -140,51 +140,31 @@ async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inm
             console.log(`✅ Encuesta de satisfacción enviada exitosamente para la cita ${detalleCita.id}.`);
             await wiseApi.updateCaseStatus(caseId, 'solved');
             console.log(`✅ Caso ${caseId} actualizado a estado resuelto.`);
-        } else {
-            console.error(`❌ Falló el envío de la encuesta para la cita ${detalleCita.id}. No se recibió una respuesta exitosa.`);
-        }
-    } catch (error) {
-        const errorData = error.response ? error.response.data : null;
-        console.error(`❌ Falló el intento inicial de crear el caso de encuesta. Es probable que ya exista uno.`, errorData || error.message);
 
-        try {
-            let openCaseId = null;
+        } else if (response?.error === 'OPEN_CASES_EXIST' && response?.opened_cases?.length > 0) {
+            const openCaseId = response.opened_cases[0];
+            console.log(`⚠️ Ya existe un caso abierto (${openCaseId}). Cerrándolo...`);
 
-            if (errorData?.error === 'OPEN_CASES_EXIST' && errorData?.opened_cases?.length > 0) {
-                openCaseId = errorData.opened_cases[0];
-                console.log(`✅ ID de caso abierto obtenido directamente del error: ${openCaseId}.`);
-            }
+            await wiseApi.updateCaseStatus(openCaseId, 'closed');
+            console.log(`✅ Caso ${openCaseId} cerrado exitosamente.`);
 
-            if (!openCaseId) {
-                console.log(`❌ No se encontró ID de caso abierto en el error. Iniciando lógica de búsqueda...`);
-                const contact = await wiseApi.getContactIdByPhone(telefono);
-                const contactId = contact?.id;
-
-                if (contactId) {
-                    openCaseId = await wiseApi.getOpenCaseIdByContactId(contactId);
-                }
-            }
-
-            if (openCaseId) {
-                console.log(`✅ Caso abierto encontrado o capturado. ID: ${openCaseId}. Cerrando caso...`);
-                await wiseApi.updateCaseStatus(openCaseId, 'closed');
-            } else {
-                console.log(`⚠️ No se pudo encontrar un caso abierto para cerrar. Intentando reintentar...`);
-            }
-
-            console.log(`Reintentando la creación del caso...`);
+            console.log(`🔄 Reintentando creación del caso...`);
             const retryResponse = await wiseApi.createCaseAndSend(payload, null);
             const retryCaseId = retryResponse?.case_id;
 
             if (retryResponse && retryCaseId) {
-                console.log(`✅ Encuesta enviada exitosamente después de la recuperación para la cita ${detalleCita.id}.`);
-                await wiseApi.updateCaseStatus(retryCaseId, 'closed');
+                console.log(`✅ Encuesta reenviada exitosamente para la cita ${detalleCita.id}.`);
+                await wiseApi.updateCaseStatus(retryCaseId, 'solved');
             } else {
-                console.error(`❌ Falló el reintento de envío de la encuesta para la cita ${detalleCita.id}.`);
+                console.error(`Falló el reintento de la encuesta para la cita ${detalleCita.id}.`);
             }
-        } catch (recoveryError) {
-            console.error(`❌ Error crítico durante el proceso de recuperación y reintento para la cita ${detalleCita.id}:`, recoveryError.response ? recoveryError.response.data : recoveryError.message);
+        } else {
+            console.error(`Falló el envío de la encuesta para la cita ${detalleCita.id}.`, response);
         }
+    } catch (error) {
+        const errorData = error.response ? error.response.data : null;
+        console.error(`Falló el intento inicial de crear el caso de encuesta. Es probable que ya exista uno.`, errorData || error.message);
+
     }
 }
 

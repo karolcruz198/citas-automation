@@ -118,7 +118,7 @@ async function sendReportMessage(ownerName, ownerPhone, linkTemplate, groupId, t
         type_id: 0,
         activities: [{
             type: "user_reply",
-            channel: "whatsapp",
+            channel: "outgoing_whatsapp",
             template: {
                 template_id: templateId,
                 parameters: [
