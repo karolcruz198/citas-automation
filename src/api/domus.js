@@ -262,20 +262,49 @@ async function getOwnerLink(inmobiliaria, property_idpro, startDate, endDate) {
  * @returns {Array<object>}
  */
 async function getProperties(inmobiliaria) {
+    let allProperties = [];
+    let currentPage = 1;
+    let lastPage = 1;
+    
+    const extraHeaders = {
+        'Perpage': 50
+    };
+
     try {
-        const extraHeaders = {
-            'Perpage': 50
-        };
+        do {
+            console.log(`Buscando inmuebles para ${inmobiliaria} - Página ${currentPage}...`);
 
-        const response = await getFromDomus(inmobiliaria, 'owners', 'properties', {}, extraHeaders);
+            const urlParams = {
+                page: currentPage
+            };
 
-        if (response && response.data) {
-            console.log(`✅ Se obtuvieron ${response.data.length} inmuebles para ${inmobiliaria}.`);
-            return response.data;
-        } else {
-            console.warn(`AVISO: No se encontraron inmuebles para ${inmobiliaria}.`);
-            return [];
-        }
+            const response = await getFromDomus(
+                inmobiliaria, 
+                'owners', 
+                'properties', 
+                urlParams,
+                extraHeaders
+            );
+
+            if (!response || !response.data || response.data.length === 0) {
+                console.log(`Final de los resultados alcanzado en la página ${currentPage}. Deteniendo paginación.`);
+                break; 
+            }
+            if (currentPage === 1) {
+                lastPage = 2; // Fuerza el límite
+                console.log("⚠️ TEST MODE: Paginación forzada a 2 páginas para la prueba.");
+            }
+
+            allProperties = allProperties.concat(response.data);
+            
+            //lastPage = response.last_page || lastPage;
+            currentPage = response.current_page + 1; 
+
+        } while (currentPage <= lastPage);
+
+        console.log(`✅ Se obtuvieron ${allProperties.length} inmuebles totales para ${inmobiliaria}.`);
+        return allProperties;
+
     } catch (error) {
         console.error(`❌ ERROR en la función getProperties para ${inmobiliaria}:`, error.message);
         return [];

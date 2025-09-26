@@ -5,8 +5,10 @@ const moment = require('moment');
 const domusApi = require('../api/domus');
 const wiseApi = require ('../api/wise');
 
-const INMOBILIARIAS = ['bienco', 'uribienes', 'las_vegas']; 
+//const INMOBILIARIAS = ['bienco', 'uribienes', 'las_vegas'];
+const INMOBILIARIAS = ['bienco'];
 const { getBrandName } = require('../utils/brands');
+const { capitalizeWords } = require('../utils/formatting');
 
 async function sendWeeklyReports() {
     console.log("Iniciando tarea programada de envío de reportes semanales...");
@@ -68,17 +70,23 @@ async function sendWeeklyReports() {
                     console.warn(`AVISO: No se pudo generar el enlace de reporte para el inmueble ${propertyCode}. Se omite.`);
                     continue;
                 }
-                
+                const firstName = capitalizeWords(ownerDetails.name || '');
+                const lastName = capitalizeWords(ownerDetails.last_name || '');
+
+                const fullName = `${firstName} ${lastName}`.trim();
                 const urlData = linkResponse.data.data;
                 const linkCompleto = `https://crm.domus.la${urlData}`;
                 const linkTemplate = urlData.split('/file/property/')[1];
                 
                 console.log(`Enlace generado para el inmueble ${propertyCode}`);
                 console.log(`Enlace generado: ${linkCompleto}`);
+                console.log(`\nProcesando inmueble: ${propertyCode} - Propietario: ${fullName}`);
 
                 await sendReportMessage(
-                    ownerDetails.name,
+                    fullName,
                     ownerDetails.phone,
+                    ownerDetails.email,
+                    linkCompleto,
                     linkTemplate,
                     groupId,
                     templateId,
@@ -96,23 +104,38 @@ async function sendWeeklyReports() {
     console.log("\nTarea de reportes finalizada.");
 }
 
-async function sendReportMessage(ownerName, ownerPhone, linkTemplate, groupId, templateId, inmobiliaria, propertyCode) {
-    if (!ownerPhone) {
-        console.warn(`AVISO: El propietario ${ownerName} no tiene un teléfono válido. No se puede enviar el reporte.`);
+async function sendReportMessage(fullName, ownerPhone, ownerEmail, linkCompleto, linkTemplate, groupId, templateId, inmobiliaria, propertyCode) {
+    let contactoParaWise = ownerPhone 
+        ? wiseApi.formatPhoneNumber(ownerPhone) 
+        : ownerEmail;
+
+    if (!contactoParaWise) {
+        console.warn(`AVISO: El propietario ${fullName} no tiene un teléfono ni email válido. No se puede enviar el reporte.`);
         return;
     }
 
-    const telefono = wiseApi.formatPhoneNumber(ownerPhone);
+    const esEnvioWhatsApp = !!ownerPhone; //Hay  o no hay numero de celular
     const marcaSpa = getBrandName(inmobiliaria);
+
+    const contactPayload = {
+        name: fullName,
+        phone: esEnvioWhatsApp ? contactoParaWise : undefined,
+        email: ownerEmail || undefined
+    };
+
+    if (!esEnvioWhatsApp) {
+        delete contactPayload.phone;
+    } 
 
     const payload = {
         group_id: groupId,
         source_channel: "whatsapp",
-        subject: `Reporte semanal de visitas - ${ownerName}`,
+        subject: `Reporte del Inmueble - ${fullName}`,
         tags: ["Creado por API", "Domus - Informe Propietarios"],
         custom_fields: [
             { "field": "email_1", "value": moment().format('YYYY-MM-DD') },
             { "field": "email_2", "value": String(propertyCode) },
+            { "field": "email_3", "value": linkCompleto },
             { "field": "marca_spa", "value": marcaSpa }
         ],
         type_id: 0,
@@ -122,26 +145,24 @@ async function sendReportMessage(ownerName, ownerPhone, linkTemplate, groupId, t
             template: {
                 template_id: templateId,
                 parameters: [
-                    { key: "1", value: ownerName },
+                    { key: "1", value: fullName },
                     { key: "https://crm.domus.la/file/property/", value: linkTemplate }
                 ]
             },
-            contacts_to: [{
-                name: ownerName,
-                phone: telefono
-            }]
+            contacts_to: [contactPayload]
         }]
         
     };
 
     try {
         console.log(`Intentando crear caso de reporte para el inmueble ${propertyCode}...`);
+        console.log("Payload Final a enviar:", JSON.stringify(payload, null, 2));
 
         const response = await wiseApi.createCaseAndSend(payload, null);
         const caseId = response?.case_id;
 
         if (response && caseId) {
-            console.log(`✅ Reporte enviado exitosamente a ${ownerName} para el inmueble ${propertyCode}.`);
+            console.log(`✅ Reporte enviado exitosamente a ${fullName} para el inmueble ${propertyCode}.`);
             await wiseApi.updateCaseStatus(caseId, 'closed');
             console.log(`✅ Caso ${caseId} actualizado a estado cerrado.`);
         } else {
@@ -153,14 +174,20 @@ async function sendReportMessage(ownerName, ownerPhone, linkTemplate, groupId, t
 
         try {
             let openCaseId = null;
+            let contactId = null;
 
             if (errorData && errorData.error === 'OPEN_CASES_EXIST' && Array.isArray(errorData.opened_cases) && errorData.opened_cases.length > 0) {
                 openCaseId = String(errorData.opened_cases[0]);
                 console.log(`✅ ID de caso abierto obtenido directamente del error: ${openCaseId}.`);
             } else {
                 console.log(`❌ No se encontró ID de caso abierto en el error. Iniciando lógica de búsqueda...`);
-                const contact = await wiseApi.getContactIdByPhone(telefono);
-                const contactId = contact?.id;
+                if (ownerPhone) {
+                    const contact = await wiseApi.getContactIdByPhone(contactoParaWise); 
+                    contactId = contact?.id;
+                } else if (ownerEmail) {
+                    const contact = await wiseApi.getContactIdByEmail(contactoParaWise); 
+                    contactId = contact?.id;
+                }
 
                 if (contactId) {
                     openCaseId = await wiseApi.getOpenCaseIdByContactId(contactId);
