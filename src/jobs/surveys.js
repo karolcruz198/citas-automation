@@ -14,20 +14,20 @@ async function sendSurveys() {
 
     const horaActual = moment().format('YYYY-MM-DD HH:mm:ss');
 
-    const groupId = parseInt(process.env.WISE_GROUP_ID, 10);
-    
-    if (isNaN(groupId)) {
-        console.error("Error: WISE_GROUP_ID no es un número válido");
-    }
-
     for (const inmobiliaria of INMOBILIARIAS) {
         console.log(`\n--- Procesando citas concluidas para la inmobiliaria: ${inmobiliaria.toUpperCase()} ---`);
+
+        const envVarNameGrupo = `WISE_GROUP_ID_ENCUESTA_${inmobiliaria.toUpperCase()}`;
+        const groupId = parseInt(process.env[envVarNameGrupo], 10);
+
+        const envVarNameUser = `WISE_USER_ID_${inmobiliaria.toUpperCase()}`;
+        const userId = parseInt(process.env[envVarNameUser], 10);
 
         const envVarName = `WISE_TEMPLATE_ID_ENCUESTA_${inmobiliaria.toUpperCase()}`;
         const templateId = parseInt(process.env[envVarName], 10);
 
-        if (isNaN(templateId) || templateId === 0) {
-            console.warn(`⚠️ La variable de entorno '${envVarName}' no está definida o es 0. Se omite el envío de encuestas para esta inmobiliaria.`);
+        if (isNaN(groupId) || isNaN(templateId) || isNaN(userId)) {
+            console.error(`Error: Las variables para ${inmobiliaria.toUpperCase()} no están configuradas correctamente.`);
             continue;
         }
 
@@ -46,7 +46,7 @@ async function sendSurveys() {
                     const detalleCita = await domusApi.getMeetingDetail(inmobiliaria, cita.id);
 
                     if (detalleCita) {
-                        await createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inmobiliaria);
+                        await createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inmobiliaria, userId);
                     } else {
                         console.warn(`⚠️ No se pudo obtener el detalle de la cita con ID ${cita.id}. Se omite.`);
                     }
@@ -64,7 +64,7 @@ async function sendSurveys() {
     console.log("\nTarea de encuestas finalizada.");
 }
 
-async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inmobiliaria) {
+async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inmobiliaria, userId) {
     const cliente = detalleCita.contact || null;
     let telefono = null;
 
@@ -103,6 +103,7 @@ async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inm
 
     const payload = {
         group_id: groupId,
+        user_id: userId,
         source_channel: "whatsapp",
         subject: `Encuesta de Satisfacción - ${nombreCliente}`,
         tags: ["Creado por API", "Domus - Encuesta"],
@@ -115,6 +116,7 @@ async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inm
         type_id: 0,
         activities: [{
             type: "user_reply",
+            user_id: 0,
             channel: "outgoing_whatsapp",
             template: {
                 template_id: templateId,

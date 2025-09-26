@@ -13,22 +13,20 @@ async function sendDailyReminders() {
     console.log("Iniciando tarea recordatorio citas");
 
     const hoy = moment().format('YYYY-MM-DD');
-    const groupId = parseInt(process.env.WISE_GROUP_ID, 10);
+    const groupId = parseInt(process.env.WISE_GROUP_ID_RECORDATORIO, 10);
 
-    if (isNaN(groupId)) {
-        console.error("Error: WISE_GROUP_ID no es un número válido");
-        return; 
-    }
-    
     for (const inmobiliaria of INMOBILIARIAS) {
         console.log(`\n--- Procesando citas para la inmobiliaria: ${inmobiliaria.toUpperCase()} ---`);
         
         const envVarName = `WISE_TEMPLATE_ID_RECORDATORIO_${inmobiliaria.toUpperCase()}`;
         const templateId = parseInt(process.env[envVarName], 10);
 
-        if (isNaN(templateId) || templateId === 0) {
-            console.warn(`⚠️ La variable de entorno '${envVarName}' no está definida. Esta inmobiliaria será omitida.`);
-            continue; 
+        const envVarNameUser = `WISE_USER_ID_${inmobiliaria.toUpperCase()}`;
+        const userId = parseInt(process.env[envVarNameUser], 10);
+
+        if (isNaN(groupId) || isNaN(templateId) || isNaN(userId)) {
+            console.error(`Error: Las variables para ${inmobiliaria.toUpperCase()} no están configuradas correctamente.`);
+            continue;
         }
 
         try {
@@ -50,7 +48,8 @@ async function sendDailyReminders() {
                         detalle,
                         groupId,
                         templateId,
-                        inmobiliaria
+                        inmobiliaria,
+                        userId
                     );
 
                 } catch (err) {
@@ -69,7 +68,7 @@ async function sendDailyReminders() {
 }
 
 
-async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobiliaria) {
+async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobiliaria, userId) {
     const cliente = citaConDetalle.contact || null;
     let telefono = null;
 
@@ -111,6 +110,7 @@ async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobi
 
     const payload = {
         group_id: groupId,
+        user_id: userId,
         source_channel: "whatsapp",
         subject: asuntoCaso,
         tags: ["Creado por API", "Domus - Recordatorios Cita"],
@@ -125,6 +125,7 @@ async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobi
         type_id: 0,
         activities: [{
             type: "user_reply",
+            user_id: 0,
             channel: "outgoing_whatsapp",
             template: {
                 template_id: templateId,

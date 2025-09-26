@@ -11,7 +11,7 @@ const { getBrandName } = require('../utils/brands');
 async function sendWeeklyReports() {
     console.log("Iniciando tarea programada de envío de reportes semanales...");
 
-    const groupId = parseInt(process.env.WISE_GROUP_ID, 10);
+    const groupId = parseInt(process.env.WISE_GROUP_ID_RECORDATORIO, 10);
     
     if (isNaN(groupId)) {
         console.error("Error: WISE_GROUP_ID no es un número válido");
