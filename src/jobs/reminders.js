@@ -8,6 +8,7 @@ const wiseApi = require ('../api/wise');
 const INMOBILIARIAS = ['bienco', 'uribienes', 'las_vegas'];
 
 const { getBrandName, getCityFromBranchName } = require('../utils/brands');
+const { capitalizeWords } = require('../utils/formatting');
 
 async function sendDailyReminders() {
     console.log("Iniciando tarea recordatorio citas");
@@ -87,7 +88,24 @@ async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobi
     }
 
     const telefonoFormateado = wiseApi.formatPhoneNumber(telefono);
-    const nombreCliente = cliente.full_name || cliente.name || "Cliente";
+
+    const nombreCompletoFormateado = capitalizeWords(cliente.full_name || '').trim();
+    let nombreCliente;
+    if (nombreCompletoFormateado) {
+        nombreCliente = nombreCompletoFormateado;
+    } else {
+        const nombre = capitalizeWords(cliente.name || '');
+        const apellido = capitalizeWords(cliente.last_name || '');
+        
+        nombreCliente = `${nombre} ${apellido}`.trim();
+    }
+    
+    if (!nombreCliente) {
+        nombreCliente = "Cliente";
+    }
+
+    
+
     const horaCita = moment(citaConDetalle.init_time, 'HH:mm:ss').format('hh:mm A');
     const direccionInmueble = citaConDetalle.address || "el inmueble";
     const asuntoCaso = `Recordatorio de Cita para ${nombreCliente}`;

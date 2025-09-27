@@ -264,41 +264,37 @@ async function getOwnerLink(inmobiliaria, property_idpro, startDate, endDate) {
 async function getProperties(inmobiliaria) {
     let allProperties = [];
     let currentPage = 1;
-    let lastPage = 1;
+    let lastPage = null;
     
     const extraHeaders = {
-        'Perpage': 50
+        'Perpage': 50,
+        'Inmobiliaria': 1 
     };
 
     try {
         do {
             console.log(`Buscando inmuebles para ${inmobiliaria} - Página ${currentPage}...`);
 
-            const urlParams = {
-                page: currentPage
-            };
-
             const response = await getFromDomus(
                 inmobiliaria, 
                 'owners', 
                 'properties', 
-                urlParams,
+                { page: currentPage },
                 extraHeaders
             );
 
             if (!response || !response.data || response.data.length === 0) {
-                console.log(`Final de los resultados alcanzado en la página ${currentPage}. Deteniendo paginación.`);
+                console.log(`Página ${currentPage} sin resultados o final de resultados alcanzado. Deteniendo paginación.`);
                 break; 
             }
-            if (currentPage === 1) {
-                lastPage = 2; // Fuerza el límite
-                console.log("⚠️ TEST MODE: Paginación forzada a 2 páginas para la prueba.");
+            if (lastPage === null) { 
+                lastPage = response.last_page || currentPage; 
+                console.log(`Total de páginas a procesar (Límite): ${lastPage}.`);
             }
 
             allProperties = allProperties.concat(response.data);
             
-            //lastPage = response.last_page || lastPage;
-            currentPage = response.current_page + 1; 
+            currentPage++;
 
         } while (currentPage <= lastPage);
 

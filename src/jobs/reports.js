@@ -156,7 +156,6 @@ async function sendReportMessage(fullName, ownerPhone, ownerEmail, linkCompleto,
 
     try {
         console.log(`Intentando crear caso de reporte para el inmueble ${propertyCode}...`);
-        console.log("Payload Final a enviar:", JSON.stringify(payload, null, 2));
 
         const response = await wiseApi.createCaseAndSend(payload, null);
         const caseId = response?.case_id;
@@ -165,43 +164,14 @@ async function sendReportMessage(fullName, ownerPhone, ownerEmail, linkCompleto,
             console.log(`✅ Reporte enviado exitosamente a ${fullName} para el inmueble ${propertyCode}.`);
             await wiseApi.updateCaseStatus(caseId, 'closed');
             console.log(`✅ Caso ${caseId} actualizado a estado cerrado.`);
-        } else {
-            console.error(`❌ Falló el envío del reporte para el inmueble ${propertyCode}. No se recibió una respuesta exitosa.`);
-        }
-    } catch (error) {
-        const errorData = error.response ? error.response.data : null;
-        console.error(`❌ Falló el intento inicial de crear el caso de reporte. Es probable que ya exista uno.`, errorData || error.message);
+        } else if (response?.error === 'OPEN_CASES_EXIST' && response?.opened_cases?.length > 0) {
+            const openCaseId = response.opened_cases[0];
+            console.log(`⚠️ Ya existe un caso abierto (${openCaseId}). Cerrándolo...`);
 
-        try {
-            let openCaseId = null;
-            let contactId = null;
+            await wiseApi.updateCaseStatus(openCaseId, 'closed');
+            console.log(`✅ Caso ${openCaseId} cerrado exitosamente.`);
 
-            if (errorData && errorData.error === 'OPEN_CASES_EXIST' && Array.isArray(errorData.opened_cases) && errorData.opened_cases.length > 0) {
-                openCaseId = String(errorData.opened_cases[0]);
-                console.log(`✅ ID de caso abierto obtenido directamente del error: ${openCaseId}.`);
-            } else {
-                console.log(`❌ No se encontró ID de caso abierto en el error. Iniciando lógica de búsqueda...`);
-                if (ownerPhone) {
-                    const contact = await wiseApi.getContactIdByPhone(contactoParaWise); 
-                    contactId = contact?.id;
-                } else if (ownerEmail) {
-                    const contact = await wiseApi.getContactIdByEmail(contactoParaWise); 
-                    contactId = contact?.id;
-                }
-
-                if (contactId) {
-                    openCaseId = await wiseApi.getOpenCaseIdByContactId(contactId);
-                }
-            }
-
-            if (openCaseId) {
-                console.log(`✅ Caso abierto encontrado o capturado. ID: ${openCaseId}. Cerrando caso...`);
-                await wiseApi.updateCaseStatus(openCaseId, 'closed');
-                console.log(`✅ Caso ${openCaseId} cerrado. Reintentando la creación...`);
-            } else {
-                console.log(`⚠️ No se pudo encontrar un caso abierto para cerrar. Intentando reintentar...`);
-            }
-
+            console.log(`🔄 Reintentando creación del caso...`);
             const retryResponse = await wiseApi.createCaseAndSend(payload, null);
             const retryCaseId = retryResponse?.case_id;
 
@@ -211,9 +181,14 @@ async function sendReportMessage(fullName, ownerPhone, ownerEmail, linkCompleto,
             } else {
                 console.error(`❌ Falló el reintento de envío del reporte para el inmueble ${propertyCode}.`);
             }
-        } catch (recoveryError) {
-            console.error(`❌ Error crítico durante el proceso de recuperación y reintento para el inmueble ${propertyCode}:`, recoveryError.response ? recoveryError.response.data : recoveryError.message);
+
+        } else {
+            console.error(`❌ Falló el envío del reporte para el inmueble ${propertyCode}. No se recibió una respuesta exitosa.`);
         }
+    } catch (error) {
+        const errorData = error.response ? error.response.data : null;
+        console.error(`❌ Falló el intento inicial de crear el caso de reporte. Es probable que ya exista uno.`, errorData || error.message);
+
     }
 }
 

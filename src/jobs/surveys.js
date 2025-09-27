@@ -8,6 +8,7 @@ const wiseApi = require ('../api/wise');
 const INMOBILIARIAS = ['bienco', 'uribienes', 'las_vegas'];
 
 const { getBrandName, getCityFromBranchName } = require('../utils/brands');
+const { capitalizeWords } = require('../utils/formatting');
 
 async function sendSurveys() {
     console.log("Iniciando tarea programada de envío de encuestas de satisfacción...");
@@ -83,7 +84,22 @@ async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inm
     } 
 
     const telefonoFormateado = wiseApi.formatPhoneNumber(telefono);
-    const nombreCliente = cliente.full_name || cliente.name || "Cliente";
+
+    const nombreCompletoFormateado = capitalizeWords(cliente.full_name || '').trim();
+
+    let nombreCliente;
+    if (nombreCompletoFormateado) {
+        nombreCliente = nombreCompletoFormateado;
+    } else {
+        const nombre = capitalizeWords(cliente.name || '');
+        const apellido = capitalizeWords(cliente.last_name || '');
+        
+        nombreCliente = `${nombre} ${apellido}`.trim();
+    }
+    
+    if (!nombreCliente) {
+        nombreCliente = "Cliente";
+    }
 
     const property = Array.isArray(detalleCita.detailProperties) ? detalleCita.detailProperties[0] : null;
     const brokerObj = property?.broker?.[0] || property?.brokers?.[0] || null;
