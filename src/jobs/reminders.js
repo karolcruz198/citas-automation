@@ -14,10 +14,12 @@ async function sendDailyReminders() {
     console.log("Iniciando tarea recordatorio citas");
 
     const hoy = moment().format('YYYY-MM-DD');
-    const groupId = parseInt(process.env.WISE_GROUP_ID_RECORDATORIO, 10);
+    //const groupId = parseInt(process.env.WISE_GROUP_ID_RECORDATORIO, 10);
 
     for (const inmobiliaria of INMOBILIARIAS) {
         console.log(`\n--- Procesando citas para la inmobiliaria: ${inmobiliaria.toUpperCase()} ---`);
+        const envVarNameGrupo = `WISE_GROUP_ID_ENCUESTA_${inmobiliaria.toUpperCase()}`;
+        const groupId = parseInt(process.env[envVarNameGrupo], 10);
         
         const envVarName = `WISE_TEMPLATE_ID_RECORDATORIO_${inmobiliaria.toUpperCase()}`;
         const templateId = parseInt(process.env[envVarName], 10);
@@ -129,7 +131,7 @@ async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobi
     const payload = {
         group_id: groupId,
         user_id: userId,
-        source_channel: "whatsapp",
+        source_channel: "outgoing_whatsapp",
         subject: asuntoCaso,
         tags: ["Creado por API", "Domus - Recordatorios Cita"],
         custom_fields: [

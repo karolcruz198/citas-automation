@@ -129,7 +129,7 @@ async function sendReportMessage(fullName, ownerPhone, ownerEmail, linkCompleto,
 
     const payload = {
         group_id: groupId,
-        source_channel: "whatsapp",
+        source_channel: "outgoing_whatsapp",
         subject: `Reporte del Inmueble - ${fullName}`,
         tags: ["Creado por API", "Domus - Informe Propietarios"],
         custom_fields: [

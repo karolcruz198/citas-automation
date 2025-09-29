@@ -120,7 +120,7 @@ async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inm
     const payload = {
         group_id: groupId,
         user_id: userId,
-        source_channel: "whatsapp",
+        source_channel: "outgoing_whatsapp",
         subject: `Encuesta de Satisfacción - ${nombreCliente}`,
         tags: ["Creado por API", "Domus - Encuesta"],
         custom_fields: [
