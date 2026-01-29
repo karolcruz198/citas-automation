@@ -106,9 +106,10 @@ async function getMeetingsForDay(inmobiliaria, date) {
     console.error("Error: La respuesta de la API no es un array válido de citas.");
     return [];
   }
-  const validMeetings = appointments.filter(appointment => 
-    appointment.status !== "Cancelada" &&
-    appointment.status !== "Reprogramada"
+  const validMeetings = appointments.filter(
+    (appointment) =>
+      appointment.status?.name !== "Cancelada" &&
+      appointment.status?.name !== "Reprogramada"
   );
   return validMeetings;
 }
