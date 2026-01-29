@@ -147,10 +147,10 @@ async function getConcludedMeetings(inmobiliaria, date) {
         );
         
         return (
-            appointmentEnd.isAfter(previousHour) &&       // terminó después de la hora anterior
-            appointmentEnd.isSameOrBefore(now) &&        // y antes o igual a la hora actual
-            appointment.status !== "Cancelada" &&        // excluir canceladas
-            appointment.status !== "Reprogramada"      // excluir reprogramadas
+          appointmentEnd.isAfter(previousHour) && // terminó después de la hora anterior
+          appointmentEnd.isSameOrBefore(now) && // y antes o igual a la hora actual
+          appointment.status?.name !== "Cancelada" && // excluir canceladas
+          appointment.status?.name !== "Reprogramada" // excluir reprogramadas
         );
     });
 
