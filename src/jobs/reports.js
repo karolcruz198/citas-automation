@@ -145,8 +145,9 @@ async function sendReportMessage(fullName, ownerPhone, ownerEmail, linkCompleto,
             template: {
                 template_id: templateId,
                 parameters: [
-                    { key: "1", value: fullName },
-                    { key: "https://crm.domus.la/file/property/", value: linkTemplate }
+                    { key: "{{1}}", value: fullName },
+                    { key: "{url}", value: linkTemplate }
+                    //{ key: "https://crm.domus.la/file/property/", value: linkTemplate }
                 ]
             },
             contacts_to: [contactPayload]
