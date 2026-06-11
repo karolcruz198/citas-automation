@@ -108,6 +108,7 @@ async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inm
 
     const marcaSpa = getBrandName(inmobiliaria);
 
+    let cityName = "";
     const propertyDetails = detalleCita.detailProperties;
     if (propertyDetails && propertyDetails.length > 0 && propertyDetails[0].city) {
         cityName = propertyDetails[0].city;
@@ -115,6 +116,27 @@ async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inm
         cityName = getCityFromBranchName(detalleCita.branch?.name) || "Bienco";
     } else {
         cityName = "Antioquia";
+    }
+
+    //Obtener Nombre del Asesor (rol 'Anfitrión')
+    let nombreAsesor = "";
+    if (Array.isArray(detalleCita.profiles)) {
+        const anfitrion = detalleCita.profiles.find(p => p.role?.name === "Anfitrión" || p.role?.id === 1);
+        if (anfitrion && anfitrion.profile) {
+            nombreAsesor = anfitrion.profile.full_name || `${anfitrion.profile.name} ${anfitrion.profile.last_name}`.trim();
+        } else if (detalleCita.profiles[0]?.profile) {
+            // Por si no encuentra un rol explícito, toma el primer perfil como respaldo
+            nombreAsesor = detalleCita.profiles[0].profile.full_name || "";
+        }
+    }
+
+    //Obtener Código de Cita
+    const codigoCita = detalleCita.code ? String(detalleCita.code) : "";
+
+    //Obtener Código Web
+    let codigoWeb = "";
+    if (Array.isArray(detalleCita.detailProperties) && detalleCita.detailProperties.length > 0) {
+        codigoWeb = detalleCita.detailProperties[0].codpro ? String(detalleCita.detailProperties[0].codpro) : "";
     }
 
     const payload = {
@@ -127,7 +149,10 @@ async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inm
             { "field": "email_1", "value": detalleCita.date },
             { "field": "email_2", "value": String(detalleCita.id) },
             { "field": "email_3", "value": brokerName },
-            { "field": "marca_spa", "value": marcaSpa }
+            { "field": "marca_spa", "value": marcaSpa },
+            { field: "nombre_asesor", value: nombreAsesor },
+            { field: "codigo_cita", value: codigoCita },
+            { field: "codigo_web", value: codigoWeb }
         ],
         type_id: 0,
         activities: [{

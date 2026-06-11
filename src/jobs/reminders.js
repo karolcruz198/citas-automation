@@ -128,6 +128,27 @@ async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobi
         gestionSpa = citaConDetalle.detailProperties[0].biz ?? citaConDetalle.detailProperties[0].biz_code ?? null;
     }
 
+    //Obtener Nombre del Asesor (rol 'Anfitrión')
+    let nombreAsesor = "";
+    if (Array.isArray(citaConDetalle.profiles)) {
+        const anfitrion = citaConDetalle.profiles.find(p => p.role?.name === "Anfitrión" || p.role?.id === 1);
+        if (anfitrion && anfitrion.profile) {
+            nombreAsesor = anfitrion.profile.full_name || `${anfitrion.profile.name} ${anfitrion.profile.last_name}`.trim();
+        } else if (citaConDetalle.profiles[0]?.profile) {
+            // Por si no encuentra un rol explícito, toma el primer perfil como respaldo
+            nombreAsesor = citaConDetalle.profiles[0].profile.full_name || "";
+        }
+    }
+
+    //Obtener Código de Cita
+    const codigoCita = citaConDetalle.code ? String(citaConDetalle.code) : "";
+
+    //Obtener Código Web
+    let codigoWeb = "";
+    if (Array.isArray(citaConDetalle.detailProperties) && citaConDetalle.detailProperties.length > 0) {
+        codigoWeb = citaConDetalle.detailProperties[0].codpro ? String(citaConDetalle.detailProperties[0].codpro) : "";
+    }
+
     const payload = {
         group_id: groupId,
         user_id: userId,
@@ -140,7 +161,10 @@ async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobi
             { field: "email_3", value: direccionInmueble },
             { field: "email_4", value: horaCita },
             { field: "marca_spa", value: marcaSpa },
-            { field: "gestion_spa", value: gestionSpa ?? "" }
+            { field: "gestion_spa", value: gestionSpa ?? "" },
+            { field: "nombre_asesor", value: nombreAsesor },
+            { field: "codigo_cita", value: codigoCita },
+            { field: "codigo_web", value: codigoWeb }
         ],
         type_id: 0,
         activities: [{
