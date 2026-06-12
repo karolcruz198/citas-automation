@@ -163,7 +163,7 @@ async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobi
             { field: "marca_spa", value: marcaSpa },
             { field: "gestion_spa", value: gestionSpa ?? "" },
             { field: "nombre_asesor", value: nombreAsesor },
-            { field: "codigo_cita", value: codigoCita },
+            { field: "codigo_de_cita", value: codigoCita },
             { field: "codigo_web", value: codigoWeb }
         ],
         type_id: 0,

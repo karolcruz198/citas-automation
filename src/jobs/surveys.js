@@ -151,7 +151,7 @@ async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inm
             { "field": "email_3", "value": brokerName },
             { "field": "marca_spa", "value": marcaSpa },
             { field: "nombre_asesor", value: nombreAsesor },
-            { field: "codigo_cita", value: codigoCita },
+            { field: "codigo_de_cita", value: codigoCita },
             { field: "codigo_web", value: codigoWeb }
         ],
         type_id: 0,
