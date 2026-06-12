@@ -143,7 +143,7 @@ async function createAndSendWiseSurveyCase(detalleCita, groupId, templateId, inm
         group_id: groupId,
         user_id: userId,
         source_channel: "outgoing_whatsapp",
-        subject: `Encuesta de Satisfacción - ${nombreCliente}`,
+        subject: `Encuesta de Satisfacción - ${codigoCita} | #${codigoWeb}`,
         tags: ["Creado por API", "Domus - Encuesta"],
         custom_fields: [
             { "field": "email_1", "value": detalleCita.date },

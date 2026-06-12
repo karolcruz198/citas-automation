@@ -110,7 +110,7 @@ async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobi
 
     const horaCita = moment(citaConDetalle.init_time, 'HH:mm:ss').format('hh:mm A');
     const direccionInmueble = citaConDetalle.address || "el inmueble";
-    const asuntoCaso = `Recordatorio de Cita para ${nombreCliente}`;
+    
     const marcaSpa = getBrandName(inmobiliaria);
 
     let cityName = "";
@@ -148,6 +148,8 @@ async function createAndSendWiseCase(citaConDetalle, groupId, templateId, inmobi
     if (Array.isArray(citaConDetalle.detailProperties) && citaConDetalle.detailProperties.length > 0) {
         codigoWeb = citaConDetalle.detailProperties[0].codpro ? String(citaConDetalle.detailProperties[0].codpro) : "";
     }
+
+    const asuntoCaso = `Recordatorio de Cita ${codigoCita} | #${codigoWeb}`; //Recordatorio de Cita {$codigo de cita} | #{codigo_web}
 
     const payload = {
         group_id: groupId,
